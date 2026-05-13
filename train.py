@@ -33,6 +33,9 @@ def main():
                         help='Iterations to wait before LR reduction')
     parser.add_argument('--lr_factor', type=float, default=0.85,
                         help='LR reduction factor')
+    parser.add_argument('--lod_sampling', type=str, default='exp',
+                        choices=['uniform', 'exp', 'fixed0'],
+                        help='LOD sampling strategy: uniform, exp (exponential decay), fixed0')
     parser.add_argument('--save_interval', type=int, default=2000,
                         help='Save checkpoint every N iterations')
     parser.add_argument('--eval_interval', type=int, default=500,
@@ -79,6 +82,12 @@ def main():
 
     best_psnr = 0.0
 
+    # ── LOD Sampling Weights ─────────────────────────────────────────
+    # Exponential decay: LOD 0 gets highest probability, LOD n gets lowest
+    lod_probs = torch.exp(-torch.arange(num_lods, dtype=torch.float32) * 1.5)
+    lod_probs = lod_probs / lod_probs.sum()
+    print(f'LOD sampling ({args.lod_sampling}): probs={lod_probs.cpu().numpy().round(4)}')
+
     # ── Training Loop ────────────────────────────────────────────────
     for step in range(args.max_iter):
         model.current_iter = step
@@ -86,7 +95,13 @@ def main():
         # Randomly sample pixel positions and mip levels
         ys = torch.randint(0, H, (args.batch_size,), device=device)
         xs = torch.randint(0, W, (args.batch_size,), device=device)
-        lods = torch.randint(0, num_lods, (args.batch_size,), device=device)
+
+        if args.lod_sampling == 'fixed0':
+            lods = torch.zeros(args.batch_size, dtype=torch.long, device=device)
+        elif args.lod_sampling == 'exp':
+            lods = torch.multinomial(lod_probs, args.batch_size, replacement=True).to(device)
+        else:  # uniform
+            lods = torch.randint(0, num_lods, (args.batch_size,), device=device)
 
         # Ground truth from dataset's pre-computed mipmap chain
         with torch.no_grad():
