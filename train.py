@@ -71,7 +71,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, factor=args.lr_factor, patience=args.lr_patience // 100,
-        threshold=1e-4, verbose=True,
+        threshold=1e-4,
     )
     loss_weights = torch.tensor(
         dataset.get_canonical_loss_weights(), device=device
