@@ -5,13 +5,6 @@ from dataset import TextureDataset
 from learnable_grid_network import LearnableGridNetwork
 
 
-class SimpleConfig:
-    """Minimal config to satisfy TextureDataset."""
-    def __init__(self, data_dir, device):
-        self.data_dir = data_dir
-        self.device = device
-
-
 def main():
     parser = argparse.ArgumentParser(description='Train neural texture compression')
     parser.add_argument('--data_dir', type=str, required=True,
@@ -42,8 +35,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     # ── Dataset ──────────────────────────────────────────────────────
-    cfg = SimpleConfig(data_dir=args.data_dir, device=device)
-    dataset = TextureDataset(cfg)
+    dataset = TextureDataset(data_dir=args.data_dir, device=device)
     dataset.eval()
 
     H = dataset.texture_height
