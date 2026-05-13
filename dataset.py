@@ -1,5 +1,4 @@
 from typing import Dict, List, Optional
-from torchtyping import TensorType
 
 import torch
 import os
@@ -65,7 +64,7 @@ class TextureDataset(torch.nn.Module):
         self.lod_cache = self._generate_lod()
 
     @torch.no_grad()
-    def forward(self, batch_index: TensorType["batch_size", 3]) -> TensorType["batch_size", "num_channels"]:
+    def forward(self, batch_index: torch.Tensor) -> torch.Tensor:
         ys = batch_index[:, 0]
         xs = batch_index[:, 1]
         lods = batch_index[:, 2]
@@ -76,7 +75,7 @@ class TextureDataset(torch.nn.Module):
 
         return self.lod_cache[lods, scaled_ys, scaled_xs, :]
 
-    def _load_data(self) -> TensorType["H", "W", "C"]:
+    def _load_data(self) -> torch.Tensor:
         filenames = os.listdir(self.data_dir)
         textures = {}
         for filename in filenames:
@@ -139,7 +138,7 @@ class TextureDataset(torch.nn.Module):
 
         return torch.cat(ordered, dim=0).permute(1, 2, 0).to(self.device)
 
-    def _generate_lod(self) -> TensorType["num_lods", "H", "W", "C"]:
+    def _generate_lod(self) -> torch.Tensor:
         lod_cache = torch.zeros(
             [self.num_lods, self.texture_height, self.texture_width, self.num_channels]
         )
@@ -158,7 +157,7 @@ class TextureDataset(torch.nn.Module):
 
         return lod_cache.to(self.device)
 
-    def expand_to_canonical(self, x: TensorType["B", "C"]) -> TensorType["B", 11]:
+    def expand_to_canonical(self, x: torch.Tensor) -> torch.Tensor:
         B = x.shape[0]
         out = torch.zeros((B, CANONICAL_NUM_CHANNELS), device=x.device, dtype=x.dtype)
         for tex_type in self.available_textures:
