@@ -1,7 +1,11 @@
 import os
 import argparse
+import math
 import torch
-from dataset import TextureDataset
+from dataset import (
+    TextureDataset,
+    CANONICAL_CHANNEL_SLICES,
+)
 from learnable_grid_network import LearnableGridNetwork
 
 
@@ -15,7 +19,7 @@ def main():
                         help='Base texture resolution (must match grid_config.json key)')
     parser.add_argument('--batch_size', type=int, default=65536,
                         help='Number of random pixel samples per iteration')
-    parser.add_argument('--max_iter', type=int, default=5000,
+    parser.add_argument('--max_iter', type=int, default=20000,
                         help='Total training iterations')
     parser.add_argument('--lr', type=float, default=0.01,
                         help='Adam learning rate')
@@ -25,8 +29,14 @@ def main():
                         help='Number of MLP hidden layers')
     parser.add_argument('--n_frequencies', type=int, default=8,
                         help='Number of frequencies for triangle wave positional encoding')
-    parser.add_argument('--save_interval', type=int, default=500,
+    parser.add_argument('--lr_patience', type=int, default=2000,
+                        help='Iterations to wait before LR reduction')
+    parser.add_argument('--lr_factor', type=float, default=0.85,
+                        help='LR reduction factor')
+    parser.add_argument('--save_interval', type=int, default=2000,
                         help='Save checkpoint every N iterations')
+    parser.add_argument('--eval_interval', type=int, default=500,
+                        help='Evaluate PSNR every N iterations')
     parser.add_argument('--device', type=str, default='cuda',
                         help='Training device (cuda / cpu)')
     args = parser.parse_args()
@@ -59,9 +69,15 @@ def main():
 
     # ── Optimizer & Loss Weights ─────────────────────────────────────
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, factor=args.lr_factor, patience=args.lr_patience // 100,
+        threshold=1e-4, verbose=True,
+    )
     loss_weights = torch.tensor(
         dataset.get_canonical_loss_weights(), device=device
     )  # [11]
+
+    best_psnr = 0.0
 
     # ── Training Loop ────────────────────────────────────────────────
     for step in range(args.max_iter):
@@ -95,15 +111,55 @@ def main():
         loss.backward()
         optimizer.step()
 
+        scheduler.step(loss)
+
         if step % 100 == 0:
-            print(f'[{step:5d}/{args.max_iter}]  loss = {loss.item():.6f}')
+            current_lr = optimizer.param_groups[0]['lr']
+            print(f'[{step:5d}/{args.max_iter}]  loss={loss.item():.6f}  lr={current_lr:.2e}')
+
+        # Evaluate full PSNR periodically
+        if step % args.eval_interval == 0 and step > 0:
+            model.eval()
+            with torch.no_grad():
+                ys_all = torch.arange(H, device=device).view(-1, 1).expand(H, W).reshape(-1)
+                xs_all = torch.arange(W, device=device).view(1, -1).expand(H, W).reshape(-1)
+                num_pixels = H * W
+                pred_all = torch.zeros((num_pixels, 11), device=device)
+                for s in range(0, num_pixels, args.batch_size):
+                    e = min(s + args.batch_size, num_pixels)
+                    u_b = xs_all[s:e].float() / W
+                    v_b = ys_all[s:e].float() / H
+                    inp = torch.stack([u_b, v_b, torch.zeros(e - s, device=device)], dim=1)
+                    pred_all[s:e] = model(inp)
+                pred_all = pred_all.reshape(H, W, 11).cpu()
+                # Compute PSNR on available channels only
+                total_mse = 0.0
+                total_weight = 0.0
+                for tex_type in dataset.available_textures:
+                    cn_start, cn_end = CANONICAL_CHANNEL_SLICES[tex_type]
+                    pixels_flat = dataset.textures.reshape(-1, dataset.num_channels)
+                    ref = dataset.expand_to_canonical(pixels_flat).reshape(H, W, 11)[:, :, cn_start:cn_end]
+                    pr = pred_all[:, :, cn_start:cn_end]
+                    mse = ((pr - ref.cpu()) ** 2).mean().item()
+                    w = dataset.texture_configs[tex_type].get("loss_weight", 1.0)
+                    total_mse += mse * w * (cn_end - cn_start)
+                    total_weight += w * (cn_end - cn_start)
+                avg_mse = total_mse / total_weight if total_weight > 0 else 0
+                psnr = 10 * math.log10(1.0 / avg_mse) if avg_mse > 1e-10 else float('inf')
+                print(f'  [EVAL]  avg PSNR={psnr:.2f} dB')
+                if psnr > best_psnr:
+                    best_psnr = psnr
+                    best_path = os.path.join(args.output_dir, 'model_best.pth')
+                    torch.save(model.state_dict(), best_path)
+                    print(f'  [EVAL]  New best model saved: {best_path}')
+            model.train()
 
         if step % args.save_interval == 0 or step == args.max_iter - 1:
             ckpt_path = os.path.join(args.output_dir, f'model_{step}.pth')
             torch.save(model.state_dict(), ckpt_path)
             print(f'  -> Saved checkpoint: {ckpt_path}')
 
-    print('Training complete.')
+    print(f'Training complete. Best PSNR: {best_psnr:.2f} dB')
 
 
 if __name__ == '__main__':

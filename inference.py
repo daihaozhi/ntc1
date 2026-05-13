@@ -91,29 +91,29 @@ def main():
     #   normal:  model outputs [0,1] (sigmoid), save as-is (standard normal map encoding)
     #   others:  linear, save as-is
     srgb_types = {"diffuse"}
-    normal_types = {"normal"}
+
+    # Replace any NaN / inf with 0 before saving
+    pred_canonical = torch.nan_to_num(pred_canonical, nan=0.0, posinf=1.0, neginf=0.0)
 
     print('\n--- Reconstruction Results ---')
     for tex_type in dataset.available_textures:
         cn_start, cn_end = CANONICAL_CHANNEL_SLICES[tex_type]
         n_ch = cn_end - cn_start
 
-        pred_tex = pred_canonical[:, :, cn_start:cn_end]  # [H, W, C]
+        pred_tex = pred_canonical[:, :, cn_start:cn_end]
         ref_tex = ref_canonical[:, :, cn_start:cn_end]
 
-        # Apply gamma if needed for viewing
         if tex_type in srgb_types:
             save_tex = pred_tex.pow(1.0 / 2.2).clamp(0.0, 1.0)
         else:
             save_tex = pred_tex.clamp(0.0, 1.0)
 
-        # Save as PNG
+        save_np = (save_tex.numpy() * 255).round().clip(0, 255).astype(np.uint8)
+
         if n_ch == 1:
-            save_tex_np = (save_tex.squeeze(-1).numpy() * 255).astype(np.uint8)
-            img = Image.fromarray(save_tex_np, mode='L')
+            img = Image.fromarray(save_np.squeeze(-1), mode='L')
         else:
-            save_tex_np = (save_tex.numpy() * 255).astype(np.uint8)
-            img = Image.fromarray(save_tex_np, mode='RGB')
+            img = Image.fromarray(save_np, mode='RGB')
 
         save_path = os.path.join(args.output_dir, f'{tex_type}.png')
         img.save(save_path)
