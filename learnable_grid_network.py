@@ -494,8 +494,14 @@ class LearnableGridNetwork(nn.Module):
 
         pos_encoding = self._compute_positional_encoding(uv)  # [B, n_frequencies * 2]
 
-        # Sample features from the selected level
-        features = self.sample_features(uv, level=level_idx[0, 0].item())
+        # Process each level group with its own grid, then reassemble
+        features = torch.zeros(x.shape[0], self.level_feature_dims[0],
+                               device=x.device, dtype=x.dtype)
+        for l in range(len(self.grid_configs)):
+            mask = (level_idx.squeeze(1) == l)
+            if mask.any():
+                feat = self.sample_features(uv[mask], level=l)
+                features[mask] = feat
 
         combined = torch.cat([pos_encoding, features, lod], dim=1)
 
