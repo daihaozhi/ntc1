@@ -384,7 +384,17 @@ class LearnableGridNetwork(nn.Module):
         if strength <= 0.0:
             return
 
-        grid_tex = flat_params.view(resolution, resolution, feature_dim)
+        # tcnn may internally pad n_features_per_level; derive actual padded dim from params size
+        total = flat_params.numel()
+        area = resolution * resolution
+        padded_fdim = total // area
+        if padded_fdim * area != total:
+            raise ValueError(
+                f"flat_params size {total} not divisible by resolution^2={area}. "
+                f"resolution={resolution}, feature_dim={feature_dim}"
+            )
+
+        grid_tex = flat_params.view(resolution, resolution, padded_fdim)
         one_minus = 1.0 - strength
 
         left = grid_tex[:, 0, :].clone()
