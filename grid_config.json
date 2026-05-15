@@ -3,25 +3,25 @@
     "feature_grids": [
       {
         "mip_range": [0, 4],
-        "resolutions": [512, 256],
+        "resolutions": [256, 128],
         "save_bits": 64,
         "quantize_bits": 16
       },
       {
         "mip_range": [4, 6],
-        "resolutions": [128, 64],
+        "resolutions": [64, 32],
         "save_bits": 64,
         "quantize_bits": 16
       },
       {
         "mip_range": [6, 8],
-        "resolutions": [32, 16],
+        "resolutions": [16, 8],
         "save_bits": 64,
         "quantize_bits": 16
       },
       {
         "mip_range": [8, 11],
-        "resolutions": [8, 4],
+        "resolutions": [4, 2],
         "save_bits": 64,
         "quantize_bits": 16
       }
