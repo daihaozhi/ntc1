@@ -32,6 +32,9 @@ class LearnableGridNetwork(nn.Module):
         use_tiled_encoding: bool = False,
         tile_size: int = 8,
         n_frequencies: int = 8,
+        wrap_boundary_constraint: bool = True,
+        wrap_boundary_strength: float = 1.0,
+        wrap_boundary_interval: int = 16,
     ):
         super().__init__()
 
@@ -39,6 +42,10 @@ class LearnableGridNetwork(nn.Module):
         self.use_tiled_encoding = use_tiled_encoding
         self.tile_size = tile_size
         self.n_frequencies = n_frequencies
+
+        self.wrap_boundary_constraint = bool(wrap_boundary_constraint)
+        self.wrap_boundary_strength = float(wrap_boundary_strength)
+        self.wrap_boundary_interval = max(1, int(wrap_boundary_interval))
         
         if self.use_tiled_encoding:
             print(f"Using Tiled Positional Encoding with tile_size={tile_size}x{tile_size}, n_frequencies={n_frequencies}")
@@ -325,6 +332,82 @@ class LearnableGridNetwork(nn.Module):
         p = (t - w) / max(1, T - w)
         c = 0.5 * (1.0 + math.cos(math.pi * p))
         return self._qat_noise_mult_end + (self._qat_noise_mult_start - self._qat_noise_mult_end) * c
+
+    def clamp_value(self):
+        apply_wrap = (
+            self.wrap_boundary_constraint
+            and self.wrap_boundary_strength > 0.0
+            and (self.current_iter % self.wrap_boundary_interval == 0)
+        )
+
+        with torch.no_grad():
+            for level_key in self.grids:
+                level = int(level_key)
+                level_grids = self.grids[level_key]
+                level_qbits = self.grid_quantize_bits[level_key]
+
+                for i, grid in enumerate(level_grids):
+                    qbits = int(level_qbits[i].item())
+                    N_k = 2 ** qbits
+                    Q_k = 1.0 / N_k
+                    min_q = -(N_k - 1) / 2 * Q_k
+                    max_q = 0.5
+
+                    params = self._get_grid_params(grid)
+                    params.clamp_(min=min_q, max=max_q)
+
+                    if apply_wrap:
+                        grid_cfg = self.grid_configs[level][i]
+                        resolution = int(grid_cfg["resolution"])
+                        fdim = int(self.grid_feature_dims[level_key][i].item())
+                        self._enforce_wrap_boundary_constraint_inplace(
+                            params,
+                            resolution=resolution,
+                            feature_dim=fdim,
+                            strength=self.wrap_boundary_strength,
+                        )
+
+    def _get_grid_params(self, grid: nn.Module) -> torch.nn.Parameter:
+        for name, p in grid.named_parameters():
+            if name == 'params':
+                return p
+        return next(grid.parameters())
+
+    def _enforce_wrap_boundary_constraint_inplace(
+        self,
+        flat_params: torch.Tensor,
+        resolution: int,
+        feature_dim: int,
+        strength: float = 1.0,
+    ) -> None:
+        strength = float(max(0.0, min(1.0, strength)))
+        if strength <= 0.0:
+            return
+
+        grid_tex = flat_params.view(resolution, resolution, feature_dim)
+        one_minus = 1.0 - strength
+
+        left = grid_tex[:, 0, :].clone()
+        right = grid_tex[:, -1, :].clone()
+        lr_avg = 0.5 * (left + right)
+        grid_tex[:, 0, :] = left * one_minus + lr_avg * strength
+        grid_tex[:, -1, :] = right * one_minus + lr_avg * strength
+
+        top = grid_tex[0, :, :].clone()
+        bottom = grid_tex[-1, :, :].clone()
+        tb_avg = 0.5 * (top + bottom)
+        grid_tex[0, :, :] = top * one_minus + tb_avg * strength
+        grid_tex[-1, :, :] = bottom * one_minus + tb_avg * strength
+
+        c00 = grid_tex[0, 0, :].clone()
+        c01 = grid_tex[0, -1, :].clone()
+        c10 = grid_tex[-1, 0, :].clone()
+        c11 = grid_tex[-1, -1, :].clone()
+        corner_avg = 0.25 * (c00 + c01 + c10 + c11)
+        grid_tex[0, 0, :] = c00 * one_minus + corner_avg * strength
+        grid_tex[0, -1, :] = c01 * one_minus + corner_avg * strength
+        grid_tex[-1, 0, :] = c10 * one_minus + corner_avg * strength
+        grid_tex[-1, -1, :] = c11 * one_minus + corner_avg * strength
 
     def _simulate_quantize(self, features: torch.Tensor, quantize_bits: int) -> torch.Tensor:
         N_k = 2 ** quantize_bits

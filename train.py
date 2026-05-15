@@ -22,7 +22,9 @@ def main():
     parser.add_argument('--max_iter', type=int, default=20000,
                         help='Total training iterations')
     parser.add_argument('--lr', type=float, default=0.01,
-                        help='Adam learning rate')
+                        help='Adam learning rate for feature grids')
+    parser.add_argument('--network_lr', type=float, default=0.002,
+                        help='Adam learning rate for MLP network')
     parser.add_argument('--hidden_dim', type=int, default=64,
                         help='MLP hidden layer width')
     parser.add_argument('--num_hidden_layers', type=int, default=2,
@@ -64,14 +66,20 @@ def main():
         hidden_dim=args.hidden_dim,
         num_hidden_layers=args.num_hidden_layers,
         n_frequencies=args.n_frequencies,
+        max_iter=args.max_iter,
     ).to(device)
     model.train()
 
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f'Model trainable params: {total_params:,}')
 
-    # ── Optimizer & Loss Weights ─────────────────────────────────────
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    # ── Optimizer with separate LRs for grid and network ────────────
+    network_params = list(model.network.parameters())
+    optimizer_params = [{'params': network_params, 'lr': args.network_lr}]
+    for level_key in model.grids:
+        for grid in model.grids[level_key]:
+            optimizer_params.append({'params': grid.parameters(), 'lr': args.lr})
+    optimizer = torch.optim.Adam(optimizer_params)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, factor=args.lr_factor, patience=args.lr_patience // 100,
         threshold=1e-4,
@@ -125,6 +133,7 @@ def main():
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        model.clamp_value()
 
         scheduler.step(loss)
 
