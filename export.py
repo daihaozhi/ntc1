@@ -79,45 +79,53 @@ def main():
                 )
             params = params.reshape(resolution, resolution, feature_dim)
 
-            # Quantize float params -> uint8 [0, 255]
+            # Quantize float params -> uint16 [0, 2^qbits - 1]
             N_k = 2 ** qbits
             min_q = -(N_k - 1) / 2 * (1.0 / N_k)
             ints = torch.round((params + (-min_q)) * N_k)
-            ints = torch.clamp(ints, min=0, max=N_k - 1).to(torch.uint8)
+            ints = torch.clamp(ints, min=0, max=N_k - 1).to(torch.int32)
 
-            # Pad/select to 4 channels (RGBA)
-            if feature_dim == 1:
-                rgba = torch.zeros(resolution, resolution, 4, dtype=torch.uint8)
-                rgba[:, :, 0] = ints[:, :, 0]
-                rgba[:, :, 1] = ints[:, :, 0]
-                rgba[:, :, 2] = ints[:, :, 0]
-                rgba[:, :, 3] = 255
-            elif feature_dim == 2:
-                rgba = torch.zeros(resolution, resolution, 4, dtype=torch.uint8)
-                rgba[:, :, :2] = ints
-                rgba[:, :, 3] = 255
-            elif feature_dim == 3:
-                rgba = torch.ones(resolution, resolution, 4, dtype=torch.uint8) * 255
-                rgba[:, :, :3] = ints
-            else:
-                rgba = ints[:, :, :4]
+            # Split 16-bit values into hi / lo bytes
+            ints_hi = (ints >> 8).to(torch.uint8)
+            ints_lo = (ints & 0xFF).to(torch.uint8)
 
-            name = f'grid_L{level}_G{grid_idx}_r{resolution}'
-            png_path = os.path.join(args.output_dir, f'{name}.png')
-            img = Image.fromarray(rgba.numpy(), mode='RGBA')
-            img.save(png_path)
+            # Pack up to 4 feature channels per RGBA set
+            # Each set produces 2 PNGs: _hi.png (high bytes) + _lo.png (low bytes)
+            num_sets = (feature_dim + 3) // 4
 
-            metadata['feature_grids'].append({
-                'name': name,
-                'png_file': f'{name}.png',
-                'level': level,
-                'grid_index': grid_idx,
-                'resolution': resolution,
-                'channels': feature_dim,
-                'quantize_bits': qbits,
-                'is_high_res': model._is_high_res_grid(level, grid_idx),
-            })
-            print(f'  {name}.png  ({resolution}x{resolution}, {feature_dim}ch)')
+            for s in range(num_sets):
+                ch_start = s * 4
+                ch_end = min(ch_start + 4, feature_dim)
+                ch_count = ch_end - ch_start
+
+                rgba_hi = torch.zeros(resolution, resolution, 4, dtype=torch.uint8)
+                rgba_lo = torch.zeros(resolution, resolution, 4, dtype=torch.uint8)
+                rgba_hi[:, :, :ch_count] = ints_hi[:, :, ch_start:ch_end]
+                rgba_lo[:, :, :ch_count] = ints_lo[:, :, ch_start:ch_end]
+
+                set_suffix = f'_set{s}' if num_sets > 1 else ''
+                name = f'grid_L{level}_G{grid_idx}_r{resolution}{set_suffix}'
+
+                png_hi_path = os.path.join(args.output_dir, f'{name}_hi.png')
+                png_lo_path = os.path.join(args.output_dir, f'{name}_lo.png')
+                Image.fromarray(rgba_hi.numpy(), mode='RGBA').save(png_hi_path)
+                Image.fromarray(rgba_lo.numpy(), mode='RGBA').save(png_lo_path)
+
+                metadata['feature_grids'].append({
+                    'name': name,
+                    'png_hi_file': f'{name}_hi.png',
+                    'png_lo_file': f'{name}_lo.png',
+                    'level': level,
+                    'grid_index': grid_idx,
+                    'resolution': resolution,
+                    'channels': feature_dim,
+                    'channel_start': ch_start,
+                    'channel_count': ch_count,
+                    'quantize_bits': qbits,
+                    'save_bits': sbits,
+                    'is_high_res': model._is_high_res_grid(level, grid_idx),
+                })
+                print(f'  {name}_hi.png  +  {name}_lo.png  ({resolution}x{resolution}, channels [{ch_start}:{ch_end}))')
 
     # ══════════════════════════════════════════════════════════════════
     # 2. Export MLP weights as .bin (float32, row-major)
@@ -159,9 +167,9 @@ def main():
     # 4. Print Vulkan binding summary
     # ══════════════════════════════════════════════════════════════════
     print('\n=== Vulkan Descriptor Set Layout ===')
-    print('Feature Grids (Combined Image Samplers):')
+    print('Feature Grids (Combined Image Samplers, 16-bit stored as hi/lo byte pair):')
     for fg in metadata['feature_grids']:
-        print(f'  binding  →  {fg["name"]}.png  (RGBA8, {fg["resolution"]}x{fg["resolution"]})')
+        print(f'  binding  →  {fg["png_hi_file"]} + {fg["png_lo_file"]}  (RGBA8×2, {fg["resolution"]}x{fg["resolution"]}, channels=[{fg["channel_start"]}:{fg["channel_start"]+fg["channel_count"]})')
     print(f'\nMLP Weights (Storage Buffer / Uniform Buffer):')
     print(f'  Total: {weight_count} floats = {weight_count * 4} bytes')
     for layer in metadata['mlp_layers']:
