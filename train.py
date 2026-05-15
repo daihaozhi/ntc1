@@ -25,15 +25,15 @@ def main():
                         help='Adam learning rate for feature grids')
     parser.add_argument('--network_lr', type=float, default=0.002,
                         help='Adam learning rate for MLP network')
-    parser.add_argument('--hidden_dim', type=int, default=64,
+    parser.add_argument('--hidden_dim', type=int, default=96,
                         help='MLP hidden layer width')
-    parser.add_argument('--num_hidden_layers', type=int, default=2,
+    parser.add_argument('--num_hidden_layers', type=int, default=3,
                         help='Number of MLP hidden layers')
     parser.add_argument('--n_frequencies', type=int, default=8,
                         help='Number of frequencies for triangle wave positional encoding')
-    parser.add_argument('--lr_patience', type=int, default=2000,
+    parser.add_argument('--lr_patience', type=int, default=1000,
                         help='Iterations to wait before LR reduction')
-    parser.add_argument('--lr_factor', type=float, default=0.85,
+    parser.add_argument('--lr_factor', type=float, default=0.7,
                         help='LR reduction factor')
     parser.add_argument('--lod_sampling', type=str, default='exp',
                         choices=['uniform', 'exp', 'fixed0'],
@@ -81,8 +81,8 @@ def main():
             optimizer_params.append({'params': grid.parameters(), 'lr': args.lr})
     optimizer = torch.optim.Adam(optimizer_params)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, factor=args.lr_factor, patience=args.lr_patience // 100,
-        threshold=1e-4,
+        optimizer, factor=args.lr_factor, patience=args.lr_patience,
+        threshold=1e-6, min_lr=1e-6,
     )
     loss_weights = torch.tensor(
         dataset.get_canonical_loss_weights(), device=device
@@ -92,7 +92,7 @@ def main():
 
     # ── LOD Sampling Weights ─────────────────────────────────────────
     # Exponential decay: LOD 0 gets highest probability, LOD n gets lowest
-    lod_probs = torch.exp(-torch.arange(num_lods, dtype=torch.float32) * 1.5)
+    lod_probs = torch.exp(-torch.arange(num_lods, dtype=torch.float32) * 1.0)
     lod_probs = lod_probs / lod_probs.sum()
     print(f'LOD sampling ({args.lod_sampling}): probs={lod_probs.cpu().numpy().round(4)}')
 

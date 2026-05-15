@@ -16,9 +16,9 @@ def main():
                         help='Directory to save exported files')
     parser.add_argument('--texture_resolution', type=int, default=1024,
                         help='Base texture resolution')
-    parser.add_argument('--hidden_dim', type=int, default=64,
+    parser.add_argument('--hidden_dim', type=int, default=96,
                         help='MLP hidden layer width (must match training)')
-    parser.add_argument('--num_hidden_layers', type=int, default=2,
+    parser.add_argument('--num_hidden_layers', type=int, default=3,
                         help='Number of MLP hidden layers (must match training)')
     parser.add_argument('--n_frequencies', type=int, default=8,
                         help='Number of frequencies (must match training)')
