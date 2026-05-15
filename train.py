@@ -25,9 +25,9 @@ def main():
                         help='Adam learning rate for feature grids')
     parser.add_argument('--network_lr', type=float, default=0.002,
                         help='Adam learning rate for MLP network')
-    parser.add_argument('--hidden_dim', type=int, default=96,
+    parser.add_argument('--hidden_dim', type=int, default=32,
                         help='MLP hidden layer width')
-    parser.add_argument('--num_hidden_layers', type=int, default=3,
+    parser.add_argument('--num_hidden_layers', type=int, default=2,
                         help='Number of MLP hidden layers')
     parser.add_argument('--n_frequencies', type=int, default=8,
                         help='Number of frequencies for triangle wave positional encoding')
