@@ -157,3 +157,36 @@ For the first Vulkan integration pass, replace only one material with NTC and ke
 4. Decode the exported material only for the selected Sponza4K material.
 5. Compare tracked GPU memory, G-buffer time, and visual error.
 
+Current DDGI integration step:
+
+The DDGI project also has a `Sponza 4K NTC` scene that consumes reconstructed texture images generated from the trained checkpoints. This is an intermediate validation path before wiring the exported feature grids and MLP weights into a Vulkan shader decoder.
+
+For a batch run created by `batch_train_sponza4k.py`, generate reconstructed textures with:
+
+```powershell
+python batch_reconstruct_sponza4k.py `
+  --batch_dir "..\runs_sponza4k_batch" `
+  --resolution 4096 `
+  --device cuda
+```
+
+The output layout expected by DDGI is:
+
+```text
+external/runs_sponza4k_batch/reconstructed_4096/
+  000_arch_stone_wall_01/
+    diffuse.png
+    normal.png
+    roughness.png
+    metallic.png
+    occlusion.png
+  ...
+```
+
+Then launch the renderer with:
+
+```powershell
+.\build-vs2026\Debug\ddgi_rt.exe --scene sponza4kntc
+```
+
+`exported_4096` is still useful for the future true runtime NTC decoder. The current `Sponza 4K NTC` scene deliberately uses reconstructed images so the material mapping and lighting path can be verified inside DDGI first.
