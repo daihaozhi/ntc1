@@ -1,6 +1,7 @@
 import os
 import argparse
 import math
+from pathlib import Path
 import torch
 from dataset import (
     TextureDataset,
@@ -17,6 +18,8 @@ def main():
                         help='Directory to save checkpoints and results')
     parser.add_argument('--texture_resolution', type=int, default=1024,
                         help='Base texture resolution (must match grid_config.json key)')
+    parser.add_argument('--grid_config', type=str, default=None,
+                        help='Path to grid_config.json. Defaults to the file next to train.py')
     parser.add_argument('--batch_size', type=int, default=65536,
                         help='Number of random pixel samples per iteration')
     parser.add_argument('--max_iter', type=int, default=20000,
@@ -48,6 +51,7 @@ def main():
 
     device = torch.device(args.device if args.device == 'cpu' or torch.cuda.is_available() else 'cpu')
     os.makedirs(args.output_dir, exist_ok=True)
+    grid_config_path = args.grid_config or str(Path(__file__).with_name('grid_config.json'))
 
     # ── Dataset ──────────────────────────────────────────────────────
     dataset = TextureDataset(data_dir=args.data_dir, device=device)
@@ -60,7 +64,7 @@ def main():
 
     # ── Model ────────────────────────────────────────────────────────
     model = LearnableGridNetwork(
-        grid_config_path='grid_config.json',
+        grid_config_path=grid_config_path,
         texture_resolution=args.texture_resolution,
         output_dim=11,
         hidden_dim=args.hidden_dim,

@@ -26,5 +26,61 @@
         "quantize_bits": 16
       }
     ]
+  },
+  "2048": {
+    "feature_grids": [
+      {
+        "mip_range": [0, 5],
+        "resolutions": [1024, 512],
+        "save_bits": 64,
+        "quantize_bits": 16
+      },
+      {
+        "mip_range": [5, 7],
+        "resolutions": [256, 128],
+        "save_bits": 64,
+        "quantize_bits": 16
+      },
+      {
+        "mip_range": [7, 9],
+        "resolutions": [64, 32],
+        "save_bits": 64,
+        "quantize_bits": 16
+      },
+      {
+        "mip_range": [9, 12],
+        "resolutions": [16, 8],
+        "save_bits": 64,
+        "quantize_bits": 16
+      }
+    ]
+  },
+  "4096": {
+    "feature_grids": [
+      {
+        "mip_range": [0, 5],
+        "resolutions": [1024, 512],
+        "save_bits": 64,
+        "quantize_bits": 16
+      },
+      {
+        "mip_range": [5, 7],
+        "resolutions": [256, 128],
+        "save_bits": 64,
+        "quantize_bits": 16
+      },
+      {
+        "mip_range": [7, 10],
+        "resolutions": [64, 32],
+        "save_bits": 64,
+        "quantize_bits": 16
+      },
+      {
+        "mip_range": [10, 13],
+        "resolutions": [16, 8],
+        "save_bits": 64,
+        "quantize_bits": 16
+      }
+    ]
   }
 }

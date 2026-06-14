@@ -1,6 +1,7 @@
 import os
 import argparse
 import math
+from pathlib import Path
 import torch
 import numpy as np
 from PIL import Image
@@ -23,6 +24,8 @@ def main():
                         help='Directory to save reconstructed textures')
     parser.add_argument('--texture_resolution', type=int, default=1024,
                         help='Base texture resolution (must match training config)')
+    parser.add_argument('--grid_config', type=str, default=None,
+                        help='Path to grid_config.json. Defaults to the file next to inference.py')
     parser.add_argument('--hidden_dim', type=int, default=32,
                         help='MLP hidden layer width (must match training config)')
     parser.add_argument('--num_hidden_layers', type=int, default=2,
@@ -37,6 +40,7 @@ def main():
 
     device = torch.device(args.device if args.device == 'cpu' or torch.cuda.is_available() else 'cpu')
     os.makedirs(args.output_dir, exist_ok=True)
+    grid_config_path = args.grid_config or str(Path(__file__).with_name('grid_config.json'))
 
     # ── Load original textures as reference ──────────────────────────
     dataset = TextureDataset(data_dir=args.data_dir, device=device)
@@ -50,7 +54,7 @@ def main():
 
     # ── Load model ───────────────────────────────────────────────────
     model = LearnableGridNetwork(
-        grid_config_path='grid_config.json',
+        grid_config_path=grid_config_path,
         texture_resolution=args.texture_resolution,
         output_dim=CANONICAL_NUM_CHANNELS,
         hidden_dim=args.hidden_dim,
