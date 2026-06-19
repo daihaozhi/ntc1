@@ -87,6 +87,7 @@ python train.py `
   --texture_resolution 1024 `
   --batch_size 65536 `
   --max_iter 20000 `
+  --mip_target_mode trilinear `
   --eval_interval 500 `
   --save_interval 2000 `
   --device cuda
@@ -101,12 +102,18 @@ python train.py `
   --texture_resolution 4096 `
   --batch_size 65536 `
   --max_iter 40000 `
+  --mip_target_mode trilinear `
   --eval_interval 1000 `
   --save_interval 5000 `
   --device cuda
 ```
 
 If VRAM is tight, reduce `--batch_size` first. If training is too slow, prepare a `2048` dataset and use `--texture_resolution 2048`.
+
+`train.py` now supports two training target modes:
+
+- `--mip_target_mode discrete`: train from integer mip levels generated from the maximum-resolution input textures. This is the original behavior.
+- `--mip_target_mode trilinear`: generate continuous LOD samples by bilinearly sampling two adjacent generated mip levels and linearly blending between them. This is useful when training for smoother runtime LOD-conditioned decoding.
 
 ## 5. Reconstruct for Quality Checks
 

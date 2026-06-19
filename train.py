@@ -41,6 +41,9 @@ def main():
     parser.add_argument('--lod_sampling', type=str, default='exp',
                         choices=['uniform', 'exp', 'fixed0'],
                         help='LOD sampling strategy: uniform, exp (exponential decay), fixed0')
+    parser.add_argument('--mip_target_mode', type=str, default='discrete',
+                        choices=['discrete', 'trilinear'],
+                        help='Training target mode: discrete integer mips or trilinear continuous LOD targets')
     parser.add_argument('--save_interval', type=int, default=2000,
                         help='Save checkpoint every N iterations')
     parser.add_argument('--eval_interval', type=int, default=500,
@@ -99,6 +102,7 @@ def main():
     lod_probs = torch.exp(-torch.arange(num_lods, dtype=torch.float32) * 1.0)
     lod_probs = lod_probs / lod_probs.sum()
     print(f'LOD sampling ({args.lod_sampling}): probs={lod_probs.cpu().numpy().round(4)}')
+    print(f'Mip target mode: {args.mip_target_mode}')
 
     # ── Training Loop ────────────────────────────────────────────────
     for step in range(args.max_iter):
@@ -115,18 +119,27 @@ def main():
         else:  # uniform
             lods = torch.randint(0, num_lods, (args.batch_size,), device=device)
 
+        u = xs.float() / W
+        v = ys.float() / H
+        uv = torch.stack([u, v], dim=1)
+        if args.mip_target_mode == 'trilinear' and args.lod_sampling != 'fixed0':
+            lod_values = torch.clamp(lods.float() + torch.rand(args.batch_size, device=device), max=float(num_lods - 1))
+        else:
+            lod_values = lods.float()
+
         # Ground truth from dataset's pre-computed mipmap chain
         with torch.no_grad():
-            batch_index = torch.stack([ys, xs, lods], dim=1)  # [B, 3]
-            gt_data = dataset(batch_index)                    # [B, C]
+            if args.mip_target_mode == 'trilinear':
+                gt_data = dataset.sample_trilinear_lod(uv, lod_values)
+            else:
+                batch_index = torch.stack([ys, xs, lods], dim=1)  # [B, 3]
+                gt_data = dataset.sample_discrete_lod(batch_index)
             gt = dataset.expand_to_canonical(gt_data)         # [B, 11]
 
         # Model input:
-        #   dataset pixel coords → normalized UV [0, 1)
-        #   dataset integer lod  → normalized lod [0, 1]
-        u = xs.float() / W
-        v = ys.float() / H
-        lod_norm = lods.float() / (num_lods - 1)
+        #   dataset pixel coords -> normalized UV [0, 1)
+        #   integer or continuous lod -> normalized lod [0, 1]
+        lod_norm = lod_values / (num_lods - 1)
         model_input = torch.stack([u, v, lod_norm], dim=1)    # [B, 3]
 
         pred = model(model_input)                              # [B, 11]

@@ -65,6 +65,15 @@ class TextureDataset(torch.nn.Module):
 
     @torch.no_grad()
     def forward(self, batch_index: torch.Tensor) -> torch.Tensor:
+        return self.sample_discrete_lod(batch_index)
+
+    @torch.no_grad()
+    def sample_discrete_lod(self, batch_index: torch.Tensor) -> torch.Tensor:
+        """Sample one texel from a discrete mip level.
+
+        batch_index columns are full-resolution y, full-resolution x, and integer lod.
+        This keeps the original nearest-texel training target path available.
+        """
         ys = batch_index[:, 0]
         xs = batch_index[:, 1]
         lods = batch_index[:, 2]
@@ -74,6 +83,61 @@ class TextureDataset(torch.nn.Module):
         scaled_ys = ys // lod_scale
 
         return self.lod_cache[lods, scaled_ys, scaled_xs, :]
+
+    @torch.no_grad()
+    def sample_trilinear_lod(self, uv: torch.Tensor, lod: torch.Tensor) -> torch.Tensor:
+        """Sample the generated mip chain with bilinear-in-mip and linear-between-mips filtering.
+
+        uv is normalized [0, 1) texture space and lod is a continuous mip value.
+        This produces the same kind of target a hardware texture unit would return
+        for trilinear filtering, but from the generated training mip chain.
+        """
+        if lod.ndim == 2:
+            lod = lod.squeeze(1)
+
+        uv = torch.remainder(uv, 1.0)
+        lod = torch.clamp(lod, 0.0, float(self.num_lods - 1))
+        lod0 = torch.floor(lod).to(torch.long)
+        lod1 = torch.clamp(lod0 + 1, max=self.num_lods - 1)
+        t = (lod - lod0.float()).unsqueeze(1)
+
+        c0 = self._sample_mip_bilinear(uv, lod0)
+        c1 = self._sample_mip_bilinear(uv, lod1)
+        return c0 * (1.0 - t) + c1 * t
+
+    def _sample_mip_bilinear(self, uv: torch.Tensor, lods: torch.Tensor) -> torch.Tensor:
+        out = torch.empty((uv.shape[0], self.num_channels), device=self.device, dtype=self.textures.dtype)
+        for lod in torch.unique(lods):
+            mask = lods == lod
+            if not mask.any():
+                continue
+
+            lod_int = int(lod.item())
+            lod_h = max(self.texture_height >> lod_int, 1)
+            lod_w = max(self.texture_width >> lod_int, 1)
+            mip = self.lod_cache[lod_int, :lod_h, :lod_w, :]
+
+            p = uv[mask] * torch.tensor([lod_w, lod_h], device=self.device, dtype=uv.dtype)
+            p0 = torch.floor(p).to(torch.long)
+            f = p - p0.float()
+
+            x0 = torch.remainder(p0[:, 0], lod_w)
+            y0 = torch.remainder(p0[:, 1], lod_h)
+            x1 = torch.remainder(x0 + 1, lod_w)
+            y1 = torch.remainder(y0 + 1, lod_h)
+
+            c00 = mip[y0, x0, :]
+            c10 = mip[y0, x1, :]
+            c01 = mip[y1, x0, :]
+            c11 = mip[y1, x1, :]
+
+            fx = f[:, [0]]
+            fy = f[:, [1]]
+            c0 = c00 * (1.0 - fx) + c10 * fx
+            c1 = c01 * (1.0 - fx) + c11 * fx
+            out[mask] = c0 * (1.0 - fy) + c1 * fy
+
+        return out
 
     def _load_data(self) -> torch.Tensor:
         filenames = os.listdir(self.data_dir)
