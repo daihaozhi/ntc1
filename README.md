@@ -151,6 +151,27 @@ python eval_grid_level.py `
 
 For a 4096 model this compares `level0/level1` at `lod 5`, `level1/level2` at `lod 7`, and `level2/level3` at `lod 10`. It writes `boundary_metrics.csv` plus left/right/difference images.
 
+## Quick Boundary Experiment
+
+Use `quick_boundary_experiment.py` to train a small subset and immediately evaluate boundary continuity. This is useful for tuning `--boundary_continuity_weight` or boundary channel weights without retraining every Sponza material.
+
+```bash
+python quick_boundary_experiment.py \
+  --gltf "main1_sponza/main_sponza/NewSponza_Main_glTF_003.gltf" \
+  --work_dir "./quick_boundary_w005" \
+  --material-ids "0" \
+  --resolution 1024 \
+  --max_iter 1200 \
+  --batch_size 32768 \
+  --lod_sampling uniform \
+  --mip_target_mode trilinear \
+  --boundary_continuity_weight 0.05 \
+  --boundary_loss_preset normal_roughness \
+  --device cuda
+```
+
+The script runs `batch_train_sponza4k.py`, then `eval_grid_level.py --boundary`, and writes `boundary_summary.csv` under the experiment directory. Use `--material-ids "0,3,8"` for a slightly broader sample or `--resolution 4096 --max_iter 3000` for a closer but heavier test.
+
 ## Export Runtime Data
 
 ```powershell
