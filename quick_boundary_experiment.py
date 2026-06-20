@@ -51,6 +51,7 @@ def main() -> None:
     parser.add_argument("--max_iter", type=int, default=1200)
     parser.add_argument("--batch_size", type=int, default=32768)
     parser.add_argument("--boundary_continuity_weight", type=float, default=0.05)
+    parser.add_argument("--boundary_band_width", type=float, default=1.0)
     parser.add_argument("--boundary_loss_preset", default="normal_roughness", choices=["reconstruction", "normal_roughness", "roughness"])
     parser.add_argument("--boundary_loss_weights", default=None)
     parser.add_argument("--lod_sampling", default="uniform", choices=["uniform", "exp", "fixed0"])
@@ -92,6 +93,8 @@ def main() -> None:
         args.mip_target_mode,
         "--boundary_continuity_weight",
         str(args.boundary_continuity_weight),
+        "--boundary_band_width",
+        str(args.boundary_band_width),
         "--boundary_loss_preset",
         args.boundary_loss_preset,
         "--eval_interval",

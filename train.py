@@ -49,18 +49,26 @@ def boundary_continuity_loss(
     batch_size: int,
     device: torch.device,
     loss_weights: torch.Tensor,
+    band_width: float,
 ) -> torch.Tensor:
     if not model.level_mip_ranges or len(model.level_mip_ranges) < 2:
         return torch.zeros((), device=device)
 
     per_boundary = max(1, batch_size // (8 * (len(model.level_mip_ranges) - 1)))
+    half_band = max(0.0, float(band_width) * 0.5)
+    max_mip = float(model.num_mip_levels - 1)
     losses = []
     for left_level in range(len(model.level_mip_ranges) - 1):
         right_level = left_level + 1
         boundary_mip = float(model.level_mip_ranges[right_level][0])
-        lod_norm_value = boundary_mip / float(model.num_mip_levels - 1)
+        if half_band > 0.0:
+            mip_min = max(0.0, boundary_mip - half_band)
+            mip_max = min(max_mip, boundary_mip + half_band)
+            mip_values = torch.empty((per_boundary, 1), device=device).uniform_(mip_min, mip_max)
+        else:
+            mip_values = torch.full((per_boundary, 1), boundary_mip, device=device)
         uv = torch.rand((per_boundary, 2), device=device)
-        lod_norm = torch.full((per_boundary, 1), lod_norm_value, device=device)
+        lod_norm = mip_values / max_mip
         left = forward_forced_level(model, uv, lod_norm, left_level)
         right = forward_forced_level(model, uv, lod_norm, right_level)
         losses.append(((left - right) ** 2 * loss_weights).sum(dim=1).mean())
@@ -104,6 +112,10 @@ def main():
                         help='Training target mode: discrete integer mips or trilinear continuous LOD targets')
     parser.add_argument('--boundary_continuity_weight', type=float, default=0.0,
                         help='Weight for forcing adjacent grid levels to match at mip boundaries')
+    parser.add_argument('--boundary_band_width', type=float, default=0.0,
+                        help='Mip interval width around each grid-level boundary for continuity loss. '
+                             'For example, 1.0 samples [boundary-0.5, boundary+0.5]. '
+                             'The default 0.0 preserves exact-boundary-only training.')
     parser.add_argument('--boundary_loss_preset', type=str, default='normal_roughness',
                         choices=['reconstruction', 'normal_roughness', 'roughness'],
                         help='Channel weights used inside the boundary continuity term')
@@ -176,6 +188,7 @@ def main():
     print(f'Mip target mode: {args.mip_target_mode}')
     if args.boundary_continuity_weight > 0.0:
         print(f'Boundary continuity weight: {args.boundary_continuity_weight}')
+        print(f'Boundary band width: {args.boundary_band_width}')
         print(f'Boundary channel weights: {boundary_weight_config if boundary_weight_config else "reconstruction"}')
 
     # ── Training Loop ────────────────────────────────────────────────
@@ -221,7 +234,13 @@ def main():
         # Weighted MSE loss
         reconstruction_loss = ((pred - gt) ** 2 * loss_weights).sum(dim=1).mean()
         if args.boundary_continuity_weight > 0.0:
-            continuity_loss = boundary_continuity_loss(model, args.batch_size, device, boundary_loss_weights)
+            continuity_loss = boundary_continuity_loss(
+                model,
+                args.batch_size,
+                device,
+                boundary_loss_weights,
+                args.boundary_band_width,
+            )
             loss = reconstruction_loss + args.boundary_continuity_weight * continuity_loss
         else:
             continuity_loss = torch.zeros((), device=device)

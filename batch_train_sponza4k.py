@@ -86,6 +86,8 @@ def main() -> None:
     parser.add_argument("--lod_sampling", default="exp", choices=["uniform", "exp", "fixed0"])
     parser.add_argument("--mip_target_mode", default="discrete", choices=["discrete", "trilinear"])
     parser.add_argument("--boundary_continuity_weight", type=float, default=0.0)
+    parser.add_argument("--boundary_band_width", type=float, default=0.0,
+                        help="Mip interval width around each grid-level boundary for continuity loss")
     parser.add_argument("--boundary_loss_preset", default="normal_roughness", choices=["reconstruction", "normal_roughness", "roughness"])
     parser.add_argument("--boundary_loss_weights", default=None, help='Optional JSON object, e.g. {"normal":2,"roughness":5}')
     parser.add_argument("--eval_interval", type=int, default=1000)
@@ -196,6 +198,8 @@ def main() -> None:
                     args.mip_target_mode,
                     "--boundary_continuity_weight",
                     str(args.boundary_continuity_weight),
+                    "--boundary_band_width",
+                    str(args.boundary_band_width),
                     "--boundary_loss_preset",
                     args.boundary_loss_preset,
                     "--eval_interval",
