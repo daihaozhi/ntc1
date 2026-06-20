@@ -90,6 +90,8 @@ def main() -> None:
                         help="Mip interval width around each grid-level boundary for continuity loss")
     parser.add_argument("--boundary_loss_preset", default="normal_roughness", choices=["reconstruction", "normal_roughness", "roughness"])
     parser.add_argument("--boundary_loss_weights", default=None, help='Optional JSON object, e.g. {"normal":2,"roughness":5}')
+    parser.add_argument("--transition_delta_weight", type=float, default=0.0)
+    parser.add_argument("--transition_delta_band_width", type=float, default=1.0)
     parser.add_argument("--eval_interval", type=int, default=1000)
     parser.add_argument("--save_interval", type=int, default=5000)
     parser.add_argument("--device", default="cuda")
@@ -202,6 +204,10 @@ def main() -> None:
                     str(args.boundary_band_width),
                     "--boundary_loss_preset",
                     args.boundary_loss_preset,
+                    "--transition_delta_weight",
+                    str(args.transition_delta_weight),
+                    "--transition_delta_band_width",
+                    str(args.transition_delta_band_width),
                     "--eval_interval",
                     str(args.eval_interval),
                     "--save_interval",

@@ -54,6 +54,8 @@ def main() -> None:
     parser.add_argument("--boundary_band_width", type=float, default=1.0)
     parser.add_argument("--boundary_loss_preset", default="normal_roughness", choices=["reconstruction", "normal_roughness", "roughness"])
     parser.add_argument("--boundary_loss_weights", default=None)
+    parser.add_argument("--transition_delta_weight", type=float, default=0.0)
+    parser.add_argument("--transition_delta_band_width", type=float, default=1.0)
     parser.add_argument("--lod_sampling", default="uniform", choices=["uniform", "exp", "fixed0"])
     parser.add_argument("--mip_target_mode", default="trilinear", choices=["discrete", "trilinear"])
     parser.add_argument("--device", default="cuda")
@@ -97,6 +99,10 @@ def main() -> None:
         str(args.boundary_band_width),
         "--boundary_loss_preset",
         args.boundary_loss_preset,
+        "--transition_delta_weight",
+        str(args.transition_delta_weight),
+        "--transition_delta_band_width",
+        str(args.transition_delta_band_width),
         "--eval_interval",
         str(max(args.max_iter + 1, 1000000)),
         "--save_interval",

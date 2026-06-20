@@ -69,6 +69,8 @@ def main() -> None:
     parser.add_argument("--boundary_band_width", type=float, default=1.0)
     parser.add_argument("--boundary_loss_preset", default="normal_roughness", choices=["reconstruction", "normal_roughness", "roughness"])
     parser.add_argument("--boundary_loss_weights", default=None)
+    parser.add_argument("--transition_delta_weight", type=float, default=0.0)
+    parser.add_argument("--transition_delta_band_width", type=float, default=1.0)
     parser.add_argument("--transitions", default="0:1:4.7:5.2")
     parser.add_argument("--num_samples", type=int, default=65536)
     parser.add_argument("--preview_size", type=int, default=256)
@@ -113,6 +115,10 @@ def main() -> None:
         str(args.boundary_band_width),
         "--boundary_loss_preset",
         args.boundary_loss_preset,
+        "--transition_delta_weight",
+        str(args.transition_delta_weight),
+        "--transition_delta_band_width",
+        str(args.transition_delta_band_width),
         "--eval_interval",
         str(max(args.max_iter + 1, 1000000)),
         "--save_interval",

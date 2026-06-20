@@ -76,6 +76,46 @@ def boundary_continuity_loss(
     return torch.stack(losses).mean()
 
 
+def transition_delta_loss(
+    model: LearnableGridNetwork,
+    dataset: TextureDataset,
+    batch_size: int,
+    device: torch.device,
+    loss_weights: torch.Tensor,
+    band_width: float,
+) -> torch.Tensor:
+    if not model.level_mip_ranges or len(model.level_mip_ranges) < 2:
+        return torch.zeros((), device=device)
+
+    half_band = max(0.0, float(band_width) * 0.5)
+    if half_band <= 0.0:
+        return torch.zeros((), device=device)
+
+    per_boundary = max(1, batch_size // (8 * (len(model.level_mip_ranges) - 1)))
+    max_mip = float(model.num_mip_levels - 1)
+    losses = []
+    for left_level in range(len(model.level_mip_ranges) - 1):
+        right_level = left_level + 1
+        boundary_mip = float(model.level_mip_ranges[right_level][0])
+        offset = torch.rand((per_boundary, 1), device=device) * half_band
+        mip_left = torch.clamp(boundary_mip - offset, 0.0, max_mip)
+        mip_right = torch.clamp(boundary_mip + offset, 0.0, max_mip)
+        uv = torch.rand((per_boundary, 2), device=device)
+
+        left = forward_forced_level(model, uv, mip_left / max_mip, left_level)
+        right = forward_forced_level(model, uv, mip_right / max_mip, right_level)
+
+        with torch.no_grad():
+            gt_left = dataset.expand_to_canonical(dataset.sample_trilinear_lod(uv, mip_left.squeeze(1)))
+            gt_right = dataset.expand_to_canonical(dataset.sample_trilinear_lod(uv, mip_right.squeeze(1)))
+
+        pred_delta = torch.abs(right - left)
+        gt_delta = torch.abs(gt_right - gt_left)
+        losses.append(((pred_delta - gt_delta) ** 2 * loss_weights).sum(dim=1).mean())
+
+    return torch.stack(losses).mean()
+
+
 def main():
     parser = argparse.ArgumentParser(description='Train neural texture compression')
     parser.add_argument('--data_dir', type=str, required=True,
@@ -121,6 +161,11 @@ def main():
                         help='Channel weights used inside the boundary continuity term')
     parser.add_argument('--boundary_loss_weights', type=str, default=None,
                         help='Optional JSON object overriding boundary channel weights, e.g. {"normal":2,"roughness":5}')
+    parser.add_argument('--transition_delta_weight', type=float, default=0.0,
+                        help='Weight for matching cross-level output jump magnitude to GT mip-chain jump magnitude')
+    parser.add_argument('--transition_delta_band_width', type=float, default=1.0,
+                        help='Mip interval width around each boundary for transition delta loss. '
+                             'For example, 1.0 samples paired transitions like boundary-0.3 -> boundary+0.3.')
     parser.add_argument('--save_interval', type=int, default=2000,
                         help='Save checkpoint every N iterations')
     parser.add_argument('--eval_interval', type=int, default=500,
@@ -190,6 +235,9 @@ def main():
         print(f'Boundary continuity weight: {args.boundary_continuity_weight}')
         print(f'Boundary band width: {args.boundary_band_width}')
         print(f'Boundary channel weights: {boundary_weight_config if boundary_weight_config else "reconstruction"}')
+    if args.transition_delta_weight > 0.0:
+        print(f'Transition delta weight: {args.transition_delta_weight}')
+        print(f'Transition delta band width: {args.transition_delta_band_width}')
 
     # ── Training Loop ────────────────────────────────────────────────
     for step in range(args.max_iter):
@@ -241,10 +289,26 @@ def main():
                 boundary_loss_weights,
                 args.boundary_band_width,
             )
-            loss = reconstruction_loss + args.boundary_continuity_weight * continuity_loss
         else:
             continuity_loss = torch.zeros((), device=device)
-            loss = reconstruction_loss
+
+        if args.transition_delta_weight > 0.0:
+            delta_loss = transition_delta_loss(
+                model,
+                dataset,
+                args.batch_size,
+                device,
+                boundary_loss_weights,
+                args.transition_delta_band_width,
+            )
+        else:
+            delta_loss = torch.zeros((), device=device)
+
+        loss = (
+            reconstruction_loss
+            + args.boundary_continuity_weight * continuity_loss
+            + args.transition_delta_weight * delta_loss
+        )
 
         optimizer.zero_grad()
         loss.backward()
@@ -255,11 +319,12 @@ def main():
 
         if step % 100 == 0:
             current_lr = optimizer.param_groups[0]['lr']
-            if args.boundary_continuity_weight > 0.0:
+            if args.boundary_continuity_weight > 0.0 or args.transition_delta_weight > 0.0:
                 print(
                     f'[{step:5d}/{args.max_iter}]  loss={loss.item():.6f}  '
                     f'recon={reconstruction_loss.item():.6f}  '
-                    f'boundary={continuity_loss.item():.6f}  lr={current_lr:.2e}'
+                    f'boundary={continuity_loss.item():.6f}  '
+                    f'transition={delta_loss.item():.6f}  lr={current_lr:.2e}'
                 )
             else:
                 print(f'[{step:5d}/{args.max_iter}]  loss={loss.item():.6f}  lr={current_lr:.2e}')
