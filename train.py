@@ -1,5 +1,6 @@
 import os
 import argparse
+import json
 import math
 from pathlib import Path
 import torch
@@ -8,6 +9,32 @@ from dataset import (
     CANONICAL_CHANNEL_SLICES,
 )
 from learnable_grid_network import LearnableGridNetwork
+
+
+def boundary_loss_weight_config(preset: str) -> dict[str, float]:
+    if preset == 'reconstruction':
+        return {}
+    if preset == 'normal_roughness':
+        return {
+            'diffuse': 0.5,
+            'normal': 2.0,
+            'roughness': 4.0,
+            'occlusion': 0.25,
+            'metallic': 0.5,
+            'specular': 0.25,
+            'displacement': 0.25,
+        }
+    if preset == 'roughness':
+        return {
+            'diffuse': 0.25,
+            'normal': 1.0,
+            'roughness': 6.0,
+            'occlusion': 0.25,
+            'metallic': 0.25,
+            'specular': 0.25,
+            'displacement': 0.25,
+        }
+    raise ValueError(f"Unknown boundary loss preset: {preset}")
 
 
 def forward_forced_level(model: LearnableGridNetwork, uv: torch.Tensor, lod_norm: torch.Tensor, level: int) -> torch.Tensor:
@@ -77,6 +104,11 @@ def main():
                         help='Training target mode: discrete integer mips or trilinear continuous LOD targets')
     parser.add_argument('--boundary_continuity_weight', type=float, default=0.0,
                         help='Weight for forcing adjacent grid levels to match at mip boundaries')
+    parser.add_argument('--boundary_loss_preset', type=str, default='normal_roughness',
+                        choices=['reconstruction', 'normal_roughness', 'roughness'],
+                        help='Channel weights used inside the boundary continuity term')
+    parser.add_argument('--boundary_loss_weights', type=str, default=None,
+                        help='Optional JSON object overriding boundary channel weights, e.g. {"normal":2,"roughness":5}')
     parser.add_argument('--save_interval', type=int, default=2000,
                         help='Save checkpoint every N iterations')
     parser.add_argument('--eval_interval', type=int, default=500,
@@ -127,6 +159,12 @@ def main():
     loss_weights = torch.tensor(
         dataset.get_canonical_loss_weights(), device=device
     )  # [11]
+    boundary_weight_config = boundary_loss_weight_config(args.boundary_loss_preset)
+    if args.boundary_loss_weights:
+        boundary_weight_config.update(json.loads(args.boundary_loss_weights))
+    boundary_loss_weights = torch.tensor(
+        dataset.get_canonical_loss_weights(boundary_weight_config), device=device
+    )  # [11]
 
     best_psnr = 0.0
 
@@ -138,6 +176,7 @@ def main():
     print(f'Mip target mode: {args.mip_target_mode}')
     if args.boundary_continuity_weight > 0.0:
         print(f'Boundary continuity weight: {args.boundary_continuity_weight}')
+        print(f'Boundary channel weights: {boundary_weight_config if boundary_weight_config else "reconstruction"}')
 
     # ── Training Loop ────────────────────────────────────────────────
     for step in range(args.max_iter):
@@ -182,7 +221,7 @@ def main():
         # Weighted MSE loss
         reconstruction_loss = ((pred - gt) ** 2 * loss_weights).sum(dim=1).mean()
         if args.boundary_continuity_weight > 0.0:
-            continuity_loss = boundary_continuity_loss(model, args.batch_size, device, loss_weights)
+            continuity_loss = boundary_continuity_loss(model, args.batch_size, device, boundary_loss_weights)
             loss = reconstruction_loss + args.boundary_continuity_weight * continuity_loss
         else:
             continuity_loss = torch.zeros((), device=device)

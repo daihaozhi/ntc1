@@ -67,10 +67,11 @@ python train.py `
   --lod_sampling uniform `
   --mip_target_mode trilinear `
   --boundary_continuity_weight 0.03 `
+  --boundary_loss_preset normal_roughness `
   --device cuda
 ```
 
-The boundary term samples the mip boundaries from `grid_config.json` and forces adjacent grid levels to produce similar decoder outputs at those LODs. Keep the weight small at first, such as `0.01` to `0.05`, then check both single-level PSNR and `eval_grid_level.py --boundary`.
+The boundary term samples the mip boundaries from `grid_config.json` and forces adjacent grid levels to produce similar decoder outputs at those LODs. The `normal_roughness` preset emphasizes channels that most often turn small discontinuities into visible shimmer. Keep the global weight small at first, such as `0.01` to `0.05`, then check both single-level PSNR and `eval_grid_level.py --boundary`. For targeted experiments, pass custom JSON weights, for example `--boundary_loss_weights '{"normal":2.0,"roughness":6.0,"diffuse":0.25}'`.
 
 ## Batch Train Sponza 4K
 
@@ -83,6 +84,7 @@ python batch_train_sponza4k.py `
   --lod_sampling uniform `
   --mip_target_mode trilinear `
   --boundary_continuity_weight 0.03 `
+  --boundary_loss_preset normal_roughness `
   --device cuda
 ```
 
