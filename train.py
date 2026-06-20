@@ -10,6 +10,37 @@ from dataset import (
 from learnable_grid_network import LearnableGridNetwork
 
 
+def forward_forced_level(model: LearnableGridNetwork, uv: torch.Tensor, lod_norm: torch.Tensor, level: int) -> torch.Tensor:
+    pos_encoding = model._compute_positional_encoding(uv)
+    features = model.sample_features(uv, level=level).to(pos_encoding.dtype)
+    combined = torch.cat([pos_encoding, features, lod_norm], dim=1)
+    return model.network(combined)
+
+
+def boundary_continuity_loss(
+    model: LearnableGridNetwork,
+    batch_size: int,
+    device: torch.device,
+    loss_weights: torch.Tensor,
+) -> torch.Tensor:
+    if not model.level_mip_ranges or len(model.level_mip_ranges) < 2:
+        return torch.zeros((), device=device)
+
+    per_boundary = max(1, batch_size // (8 * (len(model.level_mip_ranges) - 1)))
+    losses = []
+    for left_level in range(len(model.level_mip_ranges) - 1):
+        right_level = left_level + 1
+        boundary_mip = float(model.level_mip_ranges[right_level][0])
+        lod_norm_value = boundary_mip / float(model.num_mip_levels - 1)
+        uv = torch.rand((per_boundary, 2), device=device)
+        lod_norm = torch.full((per_boundary, 1), lod_norm_value, device=device)
+        left = forward_forced_level(model, uv, lod_norm, left_level)
+        right = forward_forced_level(model, uv, lod_norm, right_level)
+        losses.append(((left - right) ** 2 * loss_weights).sum(dim=1).mean())
+
+    return torch.stack(losses).mean()
+
+
 def main():
     parser = argparse.ArgumentParser(description='Train neural texture compression')
     parser.add_argument('--data_dir', type=str, required=True,
@@ -44,6 +75,8 @@ def main():
     parser.add_argument('--mip_target_mode', type=str, default='discrete',
                         choices=['discrete', 'trilinear'],
                         help='Training target mode: discrete integer mips or trilinear continuous LOD targets')
+    parser.add_argument('--boundary_continuity_weight', type=float, default=0.0,
+                        help='Weight for forcing adjacent grid levels to match at mip boundaries')
     parser.add_argument('--save_interval', type=int, default=2000,
                         help='Save checkpoint every N iterations')
     parser.add_argument('--eval_interval', type=int, default=500,
@@ -103,6 +136,8 @@ def main():
     lod_probs = lod_probs / lod_probs.sum()
     print(f'LOD sampling ({args.lod_sampling}): probs={lod_probs.cpu().numpy().round(4)}')
     print(f'Mip target mode: {args.mip_target_mode}')
+    if args.boundary_continuity_weight > 0.0:
+        print(f'Boundary continuity weight: {args.boundary_continuity_weight}')
 
     # ── Training Loop ────────────────────────────────────────────────
     for step in range(args.max_iter):
@@ -145,7 +180,13 @@ def main():
         pred = model(model_input)                              # [B, 11]
 
         # Weighted MSE loss
-        loss = ((pred - gt) ** 2 * loss_weights).sum(dim=1).mean()
+        reconstruction_loss = ((pred - gt) ** 2 * loss_weights).sum(dim=1).mean()
+        if args.boundary_continuity_weight > 0.0:
+            continuity_loss = boundary_continuity_loss(model, args.batch_size, device, loss_weights)
+            loss = reconstruction_loss + args.boundary_continuity_weight * continuity_loss
+        else:
+            continuity_loss = torch.zeros((), device=device)
+            loss = reconstruction_loss
 
         optimizer.zero_grad()
         loss.backward()
@@ -156,7 +197,14 @@ def main():
 
         if step % 100 == 0:
             current_lr = optimizer.param_groups[0]['lr']
-            print(f'[{step:5d}/{args.max_iter}]  loss={loss.item():.6f}  lr={current_lr:.2e}')
+            if args.boundary_continuity_weight > 0.0:
+                print(
+                    f'[{step:5d}/{args.max_iter}]  loss={loss.item():.6f}  '
+                    f'recon={reconstruction_loss.item():.6f}  '
+                    f'boundary={continuity_loss.item():.6f}  lr={current_lr:.2e}'
+                )
+            else:
+                print(f'[{step:5d}/{args.max_iter}]  loss={loss.item():.6f}  lr={current_lr:.2e}')
 
         # Evaluate full PSNR periodically
         if step % args.eval_interval == 0 and step > 0:

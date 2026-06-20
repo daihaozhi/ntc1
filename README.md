@@ -48,7 +48,7 @@ python train.py `
   --texture_resolution 4096 `
   --batch_size 65536 `
   --max_iter 40000 `
-  --lod_sampling exp `
+  --lod_sampling uniform `
   --mip_target_mode trilinear `
   --eval_interval 1000 `
   --save_interval 5000 `
@@ -56,6 +56,21 @@ python train.py `
 ```
 
 Use `--mip_target_mode discrete` when you want the original integer-mip reconstruction target. Use `trilinear` when the runtime path needs smoother LOD-conditioned decoding.
+
+To reduce visible jumps when switching between feature grid levels, add a small boundary continuity loss:
+
+```powershell
+python train.py `
+  --data_dir ".\datasets\sponza4k_arch_stone_wall_01_4096" `
+  --output_dir ".\runs\sponza4k_arch_stone_wall_01_4096" `
+  --texture_resolution 4096 `
+  --lod_sampling uniform `
+  --mip_target_mode trilinear `
+  --boundary_continuity_weight 0.03 `
+  --device cuda
+```
+
+The boundary term samples the mip boundaries from `grid_config.json` and forces adjacent grid levels to produce similar decoder outputs at those LODs. Keep the weight small at first, such as `0.01` to `0.05`, then check both single-level PSNR and `eval_grid_level.py --boundary`.
 
 ## Batch Train Sponza 4K
 
@@ -65,8 +80,9 @@ python batch_train_sponza4k.py `
   --work_dir ".\runs_sponza4k_batch" `
   --resolution 4096 `
   --export `
-  --lod_sampling exp `
+  --lod_sampling uniform `
   --mip_target_mode trilinear `
+  --boundary_continuity_weight 0.03 `
   --device cuda
 ```
 

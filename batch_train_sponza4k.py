@@ -85,6 +85,7 @@ def main() -> None:
     parser.add_argument("--n_frequencies", type=int, default=8)
     parser.add_argument("--lod_sampling", default="exp", choices=["uniform", "exp", "fixed0"])
     parser.add_argument("--mip_target_mode", default="discrete", choices=["discrete", "trilinear"])
+    parser.add_argument("--boundary_continuity_weight", type=float, default=0.0)
     parser.add_argument("--eval_interval", type=int, default=1000)
     parser.add_argument("--save_interval", type=int, default=5000)
     parser.add_argument("--device", default="cuda")
@@ -191,6 +192,8 @@ def main() -> None:
                     args.lod_sampling,
                     "--mip_target_mode",
                     args.mip_target_mode,
+                    "--boundary_continuity_weight",
+                    str(args.boundary_continuity_weight),
                     "--eval_interval",
                     str(args.eval_interval),
                     "--save_interval",
