@@ -119,6 +119,20 @@ python eval_grid_level.py `
 
 For a 4096 model, `grid_level 1` corresponds to LODs `[5, 7)`, so it evaluates `lod 5` and `lod 6`. The script writes reconstructed PNGs and `metrics.csv`.
 
+To check whether adjacent grid levels are continuous at their boundaries, use boundary mode:
+
+```powershell
+python eval_grid_level.py `
+  --data_dir ".\datasets\sponza4k_arch_stone_wall_01_4096" `
+  --checkpoint ".\runs\sponza4k_arch_stone_wall_01_4096\model_best.pth" `
+  --output_dir ".\eval_boundaries\sponza4k_arch_stone_wall_01_4096" `
+  --texture_resolution 4096 `
+  --boundary `
+  --device cuda
+```
+
+For a 4096 model this compares `level0/level1` at `lod 5`, `level1/level2` at `lod 7`, and `level2/level3` at `lod 10`. It writes `boundary_metrics.csv` plus left/right/difference images.
+
 ## Export Runtime Data
 
 ```powershell
