@@ -8,6 +8,7 @@ This repository trains compact neural material textures and exports feature grid
 - `train.py`: trains one material NTC model from a texture folder.
 - `export.py`: exports trained feature grids and MLP weights for runtime decoding.
 - `inference.py`: reconstructs textures from a trained checkpoint for visual inspection.
+- `eval_grid_level.py`: forces one feature grid level during reconstruction and reports per-LOD PSNR.
 - `batch_train_sponza4k.py`: prepares, trains, and optionally exports many Sponza 4K materials.
 - `batch_reconstruct_sponza4k.py`: reconstructs many trained Sponza 4K materials for the DDGI validation scene.
 
@@ -101,6 +102,22 @@ python batch_reconstruct_sponza4k.py `
 ```
 
 The DDGI renderer can use reconstructed material textures for validation before switching to true online NTC decoding.
+
+## Evaluate One Grid Level
+
+To diagnose whether a nonzero feature grid level is trained well, force that level during reconstruction. By default, the script evaluates the mip range assigned to the selected level in `grid_config.json`.
+
+```powershell
+python eval_grid_level.py `
+  --data_dir ".\datasets\sponza4k_arch_stone_wall_01_4096" `
+  --checkpoint ".\runs\sponza4k_arch_stone_wall_01_4096\model_best.pth" `
+  --output_dir ".\eval_grid1\sponza4k_arch_stone_wall_01_4096" `
+  --texture_resolution 4096 `
+  --grid_level 1 `
+  --device cuda
+```
+
+For a 4096 model, `grid_level 1` corresponds to LODs `[5, 7)`, so it evaluates `lod 5` and `lod 6`. The script writes reconstructed PNGs and `metrics.csv`.
 
 ## Export Runtime Data
 
