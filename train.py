@@ -287,6 +287,11 @@ def main():
             torch.save(model.state_dict(), ckpt_path)
             print(f'  -> Saved checkpoint: {ckpt_path}')
 
+    best_path = os.path.join(args.output_dir, 'model_best.pth')
+    if not os.path.exists(best_path):
+        torch.save(model.state_dict(), best_path)
+        print(f'  -> Saved final model as best checkpoint: {best_path}')
+
     print(f'Training complete. Best PSNR: {best_psnr:.2f} dB')
 
 

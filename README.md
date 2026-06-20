@@ -170,7 +170,7 @@ python quick_boundary_experiment.py \
   --device cuda
 ```
 
-The script runs `batch_train_sponza4k.py`, then `eval_grid_level.py --boundary`, and writes `boundary_summary.csv` under the experiment directory. Use `--material-ids "0,3,8"` for a slightly broader sample or `--resolution 4096 --max_iter 3000` for a closer but heavier test.
+The script runs `batch_train_sponza4k.py`, then `eval_grid_level.py --boundary`, and writes `boundary_summary.csv` under the experiment directory. If the quick run skips expensive full-image evaluation, `train.py` still writes the final checkpoint as `model_best.pth` so export and boundary evaluation can continue. Use `--material-ids "0,3,8"` for a slightly broader sample or `--resolution 4096 --max_iter 3000` for a closer but heavier test.
 
 ## Export Runtime Data
 

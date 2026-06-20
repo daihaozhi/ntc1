@@ -81,6 +81,7 @@ def main() -> None:
         "--material-ids",
         args.material_ids,
         "--export",
+        "--reexport",
         "--batch_size",
         str(args.batch_size),
         "--max_iter",
