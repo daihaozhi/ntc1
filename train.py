@@ -109,8 +109,8 @@ def transition_delta_loss(
             gt_left = dataset.expand_to_canonical(dataset.sample_trilinear_lod(uv, mip_left.squeeze(1)))
             gt_right = dataset.expand_to_canonical(dataset.sample_trilinear_lod(uv, mip_right.squeeze(1)))
 
-        pred_delta = torch.abs(right - left)
-        gt_delta = torch.abs(gt_right - gt_left)
+        pred_delta = right - left
+        gt_delta = gt_right - gt_left
         losses.append(((pred_delta - gt_delta) ** 2 * loss_weights).sum(dim=1).mean())
 
     return torch.stack(losses).mean()
@@ -162,7 +162,7 @@ def main():
     parser.add_argument('--boundary_loss_weights', type=str, default=None,
                         help='Optional JSON object overriding boundary channel weights, e.g. {"normal":2,"roughness":5}')
     parser.add_argument('--transition_delta_weight', type=float, default=0.0,
-                        help='Weight for matching cross-level output jump magnitude to GT mip-chain jump magnitude')
+                        help='Weight for matching signed cross-level output jumps to GT mip-chain jumps')
     parser.add_argument('--transition_delta_band_width', type=float, default=1.0,
                         help='Mip interval width around each boundary for transition delta loss. '
                              'For example, 1.0 samples paired transitions like boundary-0.3 -> boundary+0.3.')
