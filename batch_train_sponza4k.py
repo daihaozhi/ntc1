@@ -58,7 +58,20 @@ def run_command(cmd: list[str], log_path: Path | None = None, dry_run: bool = Fa
         log.write(f"\n$ {printable}\n")
         log.flush()
         try:
-            subprocess.run(cmd, check=True, stdout=log, stderr=subprocess.STDOUT)
+            # Tee child output to both the persistent log and the console so
+            # long runs expose periodic loss messages immediately.
+            process = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1,
+            )
+            assert process.stdout is not None
+            for line in process.stdout:
+                log.write(line)
+                log.flush()
+                print(line, end="", flush=True)
+            return_code = process.wait()
+            if return_code:
+                raise subprocess.CalledProcessError(return_code, cmd)
         except subprocess.CalledProcessError:
             # The child traceback is intentionally captured in the per-step
             # log.  Echo its tail so a batch failure is actionable immediately.
