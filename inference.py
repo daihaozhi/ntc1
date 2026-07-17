@@ -1,6 +1,7 @@
 import os
 import argparse
 import math
+import os
 from pathlib import Path
 import torch
 import numpy as np
@@ -26,11 +27,11 @@ def main():
                         help='Base texture resolution (must match training config)')
     parser.add_argument('--grid_config', type=str, default=None,
                         help='Path to grid_config.json. Defaults to the file next to inference.py')
-    parser.add_argument('--hidden_dim', type=int, default=32,
+    parser.add_argument('--hidden_dim', type=int, default=64,
                         help='MLP hidden layer width (must match training config)')
     parser.add_argument('--num_hidden_layers', type=int, default=2,
                         help='Number of MLP hidden layers (must match training config)')
-    parser.add_argument('--n_frequencies', type=int, default=8,
+    parser.add_argument('--n_frequencies', type=int, default=5,
                         help='Number of frequencies (must match training config)')
     parser.add_argument('--batch_size', type=int, default=65536,
                         help='Batch size for reconstruction')
@@ -51,12 +52,13 @@ def main():
     # Reference in canonical 11-channel layout [H, W, 11]
     pixels_flat = dataset.textures.reshape(-1, loaded_C)  # [H*W, C]
     ref_canonical = dataset.expand_to_canonical(pixels_flat).reshape(H, W, CANONICAL_NUM_CHANNELS)
+    ref_material = ref_canonical[:, :, [0, 1, 2, 8, 3, 4, 5, 6]]
 
     # ── Load model ───────────────────────────────────────────────────
     model = LearnableGridNetwork(
         grid_config_path=grid_config_path,
         texture_resolution=args.texture_resolution,
-        output_dim=CANONICAL_NUM_CHANNELS,
+        output_dim=8,
         hidden_dim=args.hidden_dim,
         num_hidden_layers=args.num_hidden_layers,
         n_frequencies=args.n_frequencies,
@@ -73,7 +75,7 @@ def main():
     xs = torch.arange(W, device=device).view(1, -1).expand(H, W).reshape(-1)
     num_pixels = H * W
 
-    pred_canonical = torch.zeros((num_pixels, CANONICAL_NUM_CHANNELS), device=device)
+    pred_material = torch.zeros((num_pixels, 8), device=device)
 
     for start in range(0, num_pixels, args.batch_size):
         end = min(start + args.batch_size, num_pixels)
@@ -84,10 +86,10 @@ def main():
         v = ys[idx].float() / H
 
         model_input = torch.stack([u, v, torch.zeros(b, device=device)], dim=1)
-        pred_canonical[idx] = model(model_input)
+        pred_material[idx] = model(model_input)
 
-    pred_canonical = pred_canonical.reshape(H, W, CANONICAL_NUM_CHANNELS).cpu()
-    ref_canonical = ref_canonical.cpu()
+    pred_material = pred_material.reshape(H, W, 8).cpu()
+    ref_material = ref_material.cpu()
 
     # ── Save each texture type ───────────────────────────────────────
     # Conversion rules:
@@ -97,15 +99,22 @@ def main():
     srgb_types = {"diffuse"}
 
     # Replace any NaN / inf with 0 before saving
-    pred_canonical = torch.nan_to_num(pred_canonical, nan=0.0, posinf=1.0, neginf=0.0)
+    pred_material = torch.nan_to_num(pred_material, nan=0.0, posinf=1.0, neginf=0.0)
 
     print('\n--- Reconstruction Results ---')
-    for tex_type in dataset.available_textures:
-        cn_start, cn_end = CANONICAL_CHANNEL_SLICES[tex_type]
+    output_slices = {
+        'diffuse': (0, 3),
+        'metallic': (3, 4),
+        'normal': (4, 7),
+        'roughness': (7, 8),
+    }
+    for tex_type, (cn_start, cn_end) in output_slices.items():
+        if tex_type not in dataset.available_textures and tex_type != 'metallic':
+            continue
         n_ch = cn_end - cn_start
 
-        pred_tex = pred_canonical[:, :, cn_start:cn_end]
-        ref_tex = ref_canonical[:, :, cn_start:cn_end]
+        pred_tex = pred_material[:, :, cn_start:cn_end]
+        ref_tex = ref_material[:, :, cn_start:cn_end]
 
         if tex_type in srgb_types:
             save_tex = pred_tex.pow(1.0 / 2.2).clamp(0.0, 1.0)
