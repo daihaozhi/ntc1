@@ -378,9 +378,24 @@ def main():
                 pixels_flat = dataset.textures.reshape(-1, dataset.num_channels)
                 canonical_ref = dataset.expand_to_canonical(pixels_flat).reshape(H, W, 11)
                 ref = canonical_ref[:, :, [0, 1, 2, 8, 3, 4, 5, 6]].cpu()
-                avg_mse = ((pred_all - ref) ** 2).mean().item()
+                channel_mse = ((pred_all - ref) ** 2).mean(dim=(0, 1))
+                channel_names = [
+                    "basecolor.r", "basecolor.g", "basecolor.b", "metallic",
+                    "normal.r", "normal.g", "normal.b", "roughness",
+                ]
+                channel_psnr = [
+                    10 * math.log10(1.0 / float(mse)) if float(mse) > 1e-10 else float('inf')
+                    for mse in channel_mse
+                ]
+                print(
+                    "  [EVAL]  " + "  ".join(
+                        f"{name}={value:.2f} dB" for name, value in zip(channel_names, channel_psnr)
+                    ),
+                    flush=True,
+                )
+                avg_mse = channel_mse.mean().item()
                 psnr = 10 * math.log10(1.0 / avg_mse) if avg_mse > 1e-10 else float('inf')
-                print(f'  [EVAL]  avg PSNR={psnr:.2f} dB')
+                print(f'  [EVAL]  avg PSNR={psnr:.2f} dB', flush=True)
                 if psnr > best_psnr:
                     best_psnr = psnr
                     best_path = os.path.join(args.output_dir, 'model_best.pth')
