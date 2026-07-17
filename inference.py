@@ -62,6 +62,9 @@ def main():
         hidden_dim=args.hidden_dim,
         num_hidden_layers=args.num_hidden_layers,
         n_frequencies=args.n_frequencies,
+        use_tiled_encoding=True,
+        default_save_bits=192,
+        default_quantize_bits=16,
     ).to(device)
     model.eval()
 
