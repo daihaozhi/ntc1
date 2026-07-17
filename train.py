@@ -360,7 +360,7 @@ def main():
                 print(f'[{step:5d}/{args.max_iter}]  loss={loss.item():.6f}  lr={current_lr:.2e}')
 
         # Evaluate full PSNR periodically
-        if step % args.eval_interval == 0 and step > 0:
+        if args.eval_interval > 0 and step % args.eval_interval == 0 and step > 0:
             model.eval()
             with torch.no_grad():
                 ys_all = torch.arange(H, device=device).view(-1, 1).expand(H, W).reshape(-1)
@@ -387,7 +387,7 @@ def main():
                     print(f'  [EVAL]  New best model saved: {best_path}')
             model.train()
 
-        if step % args.save_interval == 0 or step == args.max_iter - 1:
+        if args.save_interval > 0 and step % args.save_interval == 0:
             ckpt_path = os.path.join(args.output_dir, f'model_{step}.pth')
             torch.save(model.state_dict(), ckpt_path)
             print(f'  -> Saved checkpoint: {ckpt_path}')

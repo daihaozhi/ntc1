@@ -106,8 +106,10 @@ def main() -> None:
     parser.add_argument("--boundary_loss_weights", default=None, help='Optional JSON object, e.g. {"normal":2,"roughness":5}')
     parser.add_argument("--transition_delta_weight", type=float, default=0.0)
     parser.add_argument("--transition_delta_band_width", type=float, default=1.0)
-    parser.add_argument("--eval_interval", type=int, default=1000)
-    parser.add_argument("--save_interval", type=int, default=5000)
+    parser.add_argument("--eval_interval", type=int, default=1000,
+                        help="Full evaluation interval; 0 disables intermediate evaluation")
+    parser.add_argument("--save_interval", type=int, default=5000,
+                        help="Checkpoint interval; 0 disables intermediate checkpoints")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--grid_config", default=None, help="Defaults to grid_config.json next to this script")
     args = parser.parse_args()
