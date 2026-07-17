@@ -1,8 +1,18 @@
 import json
 import math
+import json
 import torch
 import torch.nn as nn
 import tinycudann as tcnn
+
+
+class HardGELU(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.where(
+            x < -1.5,
+            torch.zeros_like(x),
+            torch.where(x > 1.5, x, (x / 3.0) * (x + 1.5)),
+        )
 
 
 class LearnableGridNetwork(nn.Module):
@@ -18,9 +28,9 @@ class LearnableGridNetwork(nn.Module):
         grid_configs: dict[int, list[dict]] | None = None,
         grid_config_path: str | None = None,
         texture_resolution: int = 1024,
-        default_save_bits: int = 32,
-        default_quantize_bits: int = 8,
-        output_dim: int = 11,
+        default_save_bits: int = 192,
+        default_quantize_bits: int = 16,
+        output_dim: int = 8,
         hidden_dim: int = 64,
         num_hidden_layers: int = 2,
         quantize: bool = True,
@@ -31,7 +41,7 @@ class LearnableGridNetwork(nn.Module):
         qat_noise_warmup_frac: float = 0.0,
         use_tiled_encoding: bool = False,
         tile_size: int = 8,
-        n_frequencies: int = 8,
+        n_frequencies: int = 5,
         wrap_boundary_constraint: bool = True,
         wrap_boundary_strength: float = 1.0,
         wrap_boundary_interval: int = 16,
@@ -187,19 +197,15 @@ class LearnableGridNetwork(nn.Module):
         # New network input:
         #   single level features + position encoding + lod value
         single_level_dim = self.level_feature_dims[0]
-        n_input_dims = single_level_dim + (n_frequencies * 2) + 1
-
-        self.network = tcnn.Network(
-            n_input_dims=n_input_dims,
-            n_output_dims=output_dim,
-            network_config={
-                "otype": "CutlassMLP",
-                "activation": "LeakyReLU",
-                "output_activation": "None",
-                "n_neurons": hidden_dim,
-                "n_hidden_layers": num_hidden_layers,
-            },
-        )
+        n_input_dims = single_level_dim + (n_frequencies * 2 + 2) + 1
+        layers = []
+        in_dim = n_input_dims
+        for _ in range(num_hidden_layers):
+            layers.extend([nn.Linear(in_dim, hidden_dim), HardGELU()])
+            in_dim = hidden_dim
+        layers.append(nn.Linear(in_dim, output_dim))
+        self.network = nn.Sequential(*layers)
+        self.n_input_dims = n_input_dims
 
     def _build_grid_configs(
         self,
@@ -260,7 +266,7 @@ class LearnableGridNetwork(nn.Module):
             x: Input coordinates [B, 2] in range [0, 1)
             
         Returns:
-            Encoded features [B, n_frequencies * 2]
+            Encoded features [B, n_frequencies * 2 + 2]
         """
         batch_size = x.shape[0]
         encoded_features = []
@@ -278,8 +284,9 @@ class LearnableGridNetwork(nn.Module):
             
             encoded_features.append(triangle)
         
-        # Concatenate all frequencies: [B, n_frequencies * 2]
-        return torch.cat(encoded_features, dim=1)
+        encoded = torch.cat(encoded_features, dim=1)
+        constants = torch.ones((batch_size, 2), device=x.device, dtype=x.dtype)
+        return torch.cat([encoded, constants], dim=1)
 
     def _compute_tiled_local_coords(self, uvs: torch.Tensor) -> torch.Tensor:
         """Compute local coordinates within each tile for tiled positional encoding.
@@ -428,10 +435,9 @@ class LearnableGridNetwork(nn.Module):
         noise = (torch.rand_like(features) * 2 - 1) * noise_range * mult
         features_noisy = features + noise
 
-        quantized = torch.round(features_noisy / Q_k) * Q_k
-
-        # STE: forward uses quantized, backward uses original features
-        return features + (quantized - features).detach()
+        # Paper-style simulated quantization: forward sees uniform quantization
+        # noise; the actual feature parameters are clamped after optimizer.step().
+        return features_noisy
 
     def _is_high_res_grid(self, level: int, grid_index: int) -> bool:
         """Check if a specific grid in a level is the high-resolution grid."""
@@ -639,4 +645,3 @@ if __name__ == "__main__":
 
     trainable_params = sum(param.numel() for param in model.parameters() if param.requires_grad)
     print(f"trainable parameters: {trainable_params}")
-    

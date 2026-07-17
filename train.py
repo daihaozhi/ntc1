@@ -132,13 +132,13 @@ def main():
                         help='Total training iterations')
     parser.add_argument('--lr', type=float, default=0.01,
                         help='Adam learning rate for feature grids')
-    parser.add_argument('--network_lr', type=float, default=0.002,
+    parser.add_argument('--network_lr', type=float, default=0.005,
                         help='Adam learning rate for MLP network')
-    parser.add_argument('--hidden_dim', type=int, default=32,
+    parser.add_argument('--hidden_dim', type=int, default=64,
                         help='MLP hidden layer width')
     parser.add_argument('--num_hidden_layers', type=int, default=2,
                         help='Number of MLP hidden layers')
-    parser.add_argument('--n_frequencies', type=int, default=8,
+    parser.add_argument('--n_frequencies', type=int, default=5,
                         help='Number of frequencies for triangle wave positional encoding')
     parser.add_argument('--lr_patience', type=int, default=1000,
                         help='Iterations to wait before LR reduction')
@@ -191,10 +191,13 @@ def main():
     model = LearnableGridNetwork(
         grid_config_path=grid_config_path,
         texture_resolution=args.texture_resolution,
-        output_dim=11,
+        output_dim=8,
         hidden_dim=args.hidden_dim,
         num_hidden_layers=args.num_hidden_layers,
         n_frequencies=args.n_frequencies,
+        use_tiled_encoding=True,
+        default_save_bits=192,
+        default_quantize_bits=16,
         max_iter=args.max_iter,
     ).to(device)
     model.train()
@@ -209,19 +212,16 @@ def main():
         for grid in model.grids[level_key]:
             optimizer_params.append({'params': grid.parameters(), 'lr': args.lr})
     optimizer = torch.optim.Adam(optimizer_params)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, factor=args.lr_factor, patience=args.lr_patience,
-        threshold=1e-6, min_lr=1e-6,
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=args.max_iter, eta_min=0.0,
     )
     loss_weights = torch.tensor(
-        dataset.get_canonical_loss_weights(), device=device
-    )  # [11]
+        [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 0.5], device=device
+    )  # [8]: basecolor, metalness, normal, roughness
     boundary_weight_config = boundary_loss_weight_config(args.boundary_loss_preset)
     if args.boundary_loss_weights:
         boundary_weight_config.update(json.loads(args.boundary_loss_weights))
-    boundary_loss_weights = torch.tensor(
-        dataset.get_canonical_loss_weights(boundary_weight_config), device=device
-    )  # [11]
+    boundary_loss_weights = loss_weights
 
     best_psnr = 0.0
 
@@ -269,7 +269,8 @@ def main():
             else:
                 batch_index = torch.stack([ys, xs, lods], dim=1)  # [B, 3]
                 gt_data = dataset.sample_discrete_lod(batch_index)
-            gt = dataset.expand_to_canonical(gt_data)         # [B, 11]
+            canonical_gt = dataset.expand_to_canonical(gt_data)  # [B, 11]
+            gt = canonical_gt[:, [0, 1, 2, 8, 3, 4, 5, 6]]       # [B, 8]
 
         # Model input:
         #   dataset pixel coords -> normalized UV [0, 1)
@@ -277,10 +278,10 @@ def main():
         lod_norm = lod_values / (num_lods - 1)
         model_input = torch.stack([u, v, lod_norm], dim=1)    # [B, 3]
 
-        pred = model(model_input)                              # [B, 11]
+        pred = model(model_input)                              # [B, 8]
 
         # Weighted MSE loss
-        reconstruction_loss = ((pred - gt) ** 2 * loss_weights).sum(dim=1).mean()
+        reconstruction_loss = ((pred - gt) ** 2 * loss_weights).mean()
         if args.boundary_continuity_weight > 0.0:
             continuity_loss = boundary_continuity_loss(
                 model,
@@ -315,7 +316,7 @@ def main():
         optimizer.step()
         model.clamp_value()
 
-        scheduler.step(loss)
+        scheduler.step()
 
         if step % 100 == 0:
             current_lr = optimizer.param_groups[0]['lr']
@@ -336,27 +337,18 @@ def main():
                 ys_all = torch.arange(H, device=device).view(-1, 1).expand(H, W).reshape(-1)
                 xs_all = torch.arange(W, device=device).view(1, -1).expand(H, W).reshape(-1)
                 num_pixels = H * W
-                pred_all = torch.zeros((num_pixels, 11), device=device)
+                pred_all = torch.zeros((num_pixels, 8), device=device)
                 for s in range(0, num_pixels, args.batch_size):
                     e = min(s + args.batch_size, num_pixels)
                     u_b = xs_all[s:e].float() / W
                     v_b = ys_all[s:e].float() / H
                     inp = torch.stack([u_b, v_b, torch.zeros(e - s, device=device)], dim=1)
                     pred_all[s:e] = model(inp)
-                pred_all = pred_all.reshape(H, W, 11).cpu()
-                # Compute PSNR on available channels only
-                total_mse = 0.0
-                total_weight = 0.0
-                for tex_type in dataset.available_textures:
-                    cn_start, cn_end = CANONICAL_CHANNEL_SLICES[tex_type]
-                    pixels_flat = dataset.textures.reshape(-1, dataset.num_channels)
-                    ref = dataset.expand_to_canonical(pixels_flat).reshape(H, W, 11)[:, :, cn_start:cn_end]
-                    pr = pred_all[:, :, cn_start:cn_end]
-                    mse = ((pr - ref.cpu()) ** 2).mean().item()
-                    w = dataset.texture_configs[tex_type].get("loss_weight", 1.0)
-                    total_mse += mse * w * (cn_end - cn_start)
-                    total_weight += w * (cn_end - cn_start)
-                avg_mse = total_mse / total_weight if total_weight > 0 else 0
+                pred_all = pred_all.reshape(H, W, 8).cpu()
+                pixels_flat = dataset.textures.reshape(-1, dataset.num_channels)
+                canonical_ref = dataset.expand_to_canonical(pixels_flat).reshape(H, W, 11)
+                ref = canonical_ref[:, :, [0, 1, 2, 8, 3, 4, 5, 6]].cpu()
+                avg_mse = ((pred_all - ref) ** 2).mean().item()
                 psnr = 10 * math.log10(1.0 / avg_mse) if avg_mse > 1e-10 else float('inf')
                 print(f'  [EVAL]  avg PSNR={psnr:.2f} dB')
                 if psnr > best_psnr:

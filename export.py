@@ -1,6 +1,7 @@
 import os
 import json
 import argparse
+import os
 from pathlib import Path
 import torch
 import numpy as np
@@ -19,11 +20,11 @@ def main():
                         help='Base texture resolution')
     parser.add_argument('--grid_config', type=str, default=None,
                         help='Path to grid_config.json. Defaults to the file next to export.py')
-    parser.add_argument('--hidden_dim', type=int, default=32,
+    parser.add_argument('--hidden_dim', type=int, default=64,
                         help='MLP hidden layer width (must match training)')
     parser.add_argument('--num_hidden_layers', type=int, default=2,
                         help='Number of MLP hidden layers (must match training)')
-    parser.add_argument('--n_frequencies', type=int, default=8,
+    parser.add_argument('--n_frequencies', type=int, default=5,
                         help='Number of frequencies (must match training)')
     parser.add_argument('--device', type=str, default='cuda',
                         help='Device for loading model')
@@ -36,10 +37,13 @@ def main():
     model = LearnableGridNetwork(
         grid_config_path=grid_config_path,
         texture_resolution=args.texture_resolution,
-        output_dim=11,
+        output_dim=8,
         hidden_dim=args.hidden_dim,
         num_hidden_layers=args.num_hidden_layers,
         n_frequencies=args.n_frequencies,
+        use_tiled_encoding=True,
+        default_save_bits=192,
+        default_quantize_bits=16,
     ).to(device)
     model.eval()
 
@@ -52,7 +56,7 @@ def main():
         'hidden_dim': args.hidden_dim,
         'num_hidden_layers': args.num_hidden_layers,
         'n_frequencies': args.n_frequencies,
-        'output_dim': 11,
+        'output_dim': 8,
         'n_input_dims': model.network.n_input_dims,
         'feature_grids': [],
         'mlp_layers': [],
