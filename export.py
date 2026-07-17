@@ -57,7 +57,9 @@ def main():
         'num_hidden_layers': args.num_hidden_layers,
         'n_frequencies': args.n_frequencies,
         'output_dim': 8,
-        'n_input_dims': model.network.n_input_dims,
+        # n_input_dims is stored on LearnableGridNetwork, while
+        # model.network is the plain nn.Sequential MLP.
+        'n_input_dims': model.n_input_dims,
         'positional_encoding_dims': 12,
         'lod_dims': 1,
         'grid_feature_dim': 12,
