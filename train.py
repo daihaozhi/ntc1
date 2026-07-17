@@ -263,15 +263,21 @@ def main():
             xs = torch.randint(0, W, (args.batch_size,), device=device)
         sample_count = ys.shape[0]
 
-        if args.lod_sampling == 'fixed0':
+        if args.crops_per_batch > 0:
+            if args.lod_sampling == 'fixed0':
+                batch_lod = torch.zeros((), dtype=torch.long, device=device)
+            elif args.lod_sampling == 'exp':
+                if torch.rand(()) < 0.05:
+                    batch_lod = torch.randint(0, num_lods, (), device=device)
+                else:
+                    batch_lod = torch.multinomial(lod_probs, 1).squeeze(0).to(device)
+            else:
+                batch_lod = torch.randint(0, num_lods, (), device=device)
+            lods = torch.full((sample_count,), batch_lod, dtype=torch.long, device=device)
+        elif args.lod_sampling == 'fixed0':
             lods = torch.zeros(sample_count, dtype=torch.long, device=device)
         elif args.lod_sampling == 'exp':
             lods = torch.multinomial(lod_probs, sample_count, replacement=True).to(device)
-            uniform_mask = torch.rand(sample_count, device=device) < 0.05
-            if uniform_mask.any():
-                lods[uniform_mask] = torch.randint(
-                    0, num_lods, (int(uniform_mask.sum().item()),), device=device
-                )
         else:  # uniform
             lods = torch.randint(0, num_lods, (sample_count,), device=device)
 
