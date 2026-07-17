@@ -66,6 +66,10 @@ def main() -> None:
     parser.add_argument("--resolution", type=int, default=4096, choices=[1024, 2048, 4096])
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--max-iter", type=int, default=40000)
+    parser.add_argument("--eval-interval", "--eval_interval", dest="eval_interval", type=int, default=1000,
+                        help="Full-texture evaluation interval in training iterations")
+    parser.add_argument("--save-interval", "--save_interval", dest="save_interval", type=int, default=5000,
+                        help="Checkpoint save interval in training iterations")
     parser.add_argument("--batch-size", type=int, default=65536)
     parser.add_argument("--crop-size", type=int, default=256)
     parser.add_argument("--crops-per-batch", type=int, default=8)
@@ -100,6 +104,8 @@ def main() -> None:
         "--material-ids", material_arg,
         "--export",
         "--max_iter", str(args.max_iter),
+        "--eval_interval", str(args.eval_interval),
+        "--save_interval", str(args.save_interval),
         "--batch_size", str(args.batch_size),
         "--crop_size", str(args.crop_size),
         "--crops_per_batch", str(args.crops_per_batch),
