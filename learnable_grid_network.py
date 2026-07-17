@@ -374,6 +374,21 @@ class LearnableGridNetwork(nn.Module):
                             strength=self.wrap_boundary_strength,
                         )
 
+    @torch.no_grad()
+    def quantize_grids_and_freeze(self):
+        """Materialize the paper's final scalar quantization before MLP fine-tuning."""
+        for level_key in self.grids:
+            level = int(level_key)
+            for i, grid in enumerate(self.grids[level_key]):
+                qbits = int(self.grid_quantize_bits[level_key][i].item())
+                n = float(2 ** qbits)
+                q = 1.0 / n
+                min_q = -((n - 1.0) * 0.5) * q
+                params = self._get_grid_params(grid)
+                indices = torch.round((params - min_q) / q).clamp(0.0, n - 1.0)
+                params.copy_(min_q + indices * q)
+                params.requires_grad_(False)
+
     def _get_grid_params(self, grid: nn.Module) -> torch.nn.Parameter:
         for name, p in grid.named_parameters():
             if name == 'params':

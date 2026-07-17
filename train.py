@@ -384,6 +384,32 @@ def main():
             torch.save(model.state_dict(), ckpt_path)
             print(f'  -> Saved checkpoint: {ckpt_path}')
 
+    # Materialize the final 16-bit grid values, freeze them, and adapt only the
+    # MLP to the discrete deployment representation for the final 5% steps.
+    finetune_steps = max(1, args.max_iter // 20)
+    model.quantize_grids_and_freeze()
+    model.train()
+    for finetune_step in range(finetune_steps):
+        sample_count = args.batch_size
+        ys = torch.randint(0, H, (sample_count,), device=device)
+        xs = torch.randint(0, W, (sample_count,), device=device)
+        lods = torch.multinomial(lod_probs, sample_count, replacement=True).to(device)
+        u = xs.float() / W
+        v = ys.float() / H
+        uv = torch.stack([u, v], dim=1)
+        lod_values = lods.float()
+        with torch.no_grad():
+            batch_index = torch.stack([ys, xs, lods], dim=1)
+            canonical_gt = dataset.expand_to_canonical(dataset.sample_discrete_lod(batch_index))
+            gt = canonical_gt[:, [0, 1, 2, 8, 3, 4, 5, 6]]
+        model_input = torch.stack([u, v, lod_values / (num_lods - 1)], dim=1)
+        pred = model(model_input)
+        loss = ((pred - gt) ** 2 * loss_weights).mean()
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
+
     best_path = os.path.join(args.output_dir, 'model_best.pth')
     if not os.path.exists(best_path):
         torch.save(model.state_dict(), best_path)
