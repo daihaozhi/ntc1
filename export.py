@@ -58,6 +58,18 @@ def main():
         'n_frequencies': args.n_frequencies,
         'output_dim': 8,
         'n_input_dims': model.network.n_input_dims,
+        'positional_encoding_dims': 12,
+        'lod_dims': 1,
+        'grid_feature_dim': 12,
+        'large_samples_per_level': 4,
+        'small_samples_per_level': 1,
+        'quantize_bits': 16,
+        'channel_order': [
+            'basecolor_r', 'basecolor_g', 'basecolor_b',
+            'metalness',
+            'normal_r', 'normal_g', 'normal_b',
+            'roughness',
+        ],
         'feature_grids': [],
         'mlp_layers': [],
     }
