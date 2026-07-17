@@ -170,14 +170,30 @@ class LearnableGridNetwork(nn.Module):
                 # Use Nearest for high-res grid (we'll manually sample corners), Linear for low-res
                 interp_mode = "Nearest" if is_high_res else "Linear"
 
+                # tiny-cuda-nn accepts only 1, 2, 4 or 8 features per level.
+                # Pack larger requested channel counts into same-resolution
+                # sub-levels; e.g. 12 channels become 3 x 4 features while
+                # preserving a contiguous 12-D output and identical storage.
+                if feature_dim in (1, 2, 4, 8):
+                    packed_levels = 1
+                    packed_features = feature_dim
+                elif feature_dim % 4 == 0:
+                    packed_levels = feature_dim // 4
+                    packed_features = 4
+                else:
+                    raise ValueError(
+                        f"feature_dim={feature_dim} cannot be represented by tiny-cuda-nn; "
+                        "use 1, 2, 4, 8, or a multiple of 4 channels"
+                    )
+
                 level_grids.append(
                     tcnn.Encoding(
                         n_input_dims=2,
                         encoding_config={
                             "otype": "Grid",
                             "type": "Dense",
-                            "n_levels": 1,
-                            "n_features_per_level": feature_dim,
+                            "n_levels": packed_levels,
+                            "n_features_per_level": packed_features,
                             "base_resolution": resolution,
                             "per_level_scale": 1.0,
                             "interpolation": interp_mode,

@@ -57,7 +57,19 @@ def run_command(cmd: list[str], log_path: Path | None = None, dry_run: bool = Fa
     with log_path.open("a", encoding="utf-8") as log:
         log.write(f"\n$ {printable}\n")
         log.flush()
-        subprocess.run(cmd, check=True, stdout=log, stderr=subprocess.STDOUT)
+        try:
+            subprocess.run(cmd, check=True, stdout=log, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError:
+            # The child traceback is intentionally captured in the per-step
+            # log.  Echo its tail so a batch failure is actionable immediately.
+            try:
+                lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                print(f"\n--- last 100 lines of {log_path} ---", flush=True)
+                print("\n".join(lines[-100:]), flush=True)
+                print("--- end log ---", flush=True)
+            except OSError as read_error:
+                print(f"Could not read failure log {log_path}: {read_error}", flush=True)
+            raise
 
 
 def main() -> None:
