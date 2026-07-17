@@ -345,7 +345,9 @@ def main():
 
         scheduler.step()
 
-        if step % 100 == 0:
+        # Keep console output manageable for long 250k-iteration runs while
+        # still reporting the optimization progress regularly.
+        if step % 10000 == 0 or step == 1:
             current_lr = optimizer.param_groups[0]['lr']
             if args.boundary_continuity_weight > 0.0 or args.transition_delta_weight > 0.0:
                 print(
@@ -416,10 +418,15 @@ def main():
         optimizer.step()
         scheduler.step()
 
+    # The deployment/evaluation checkpoint must always contain the actual
+    # discrete grid values, not an earlier pre-quantization best checkpoint.
+    quantized_path = os.path.join(args.output_dir, 'model_quantized.pth')
     best_path = os.path.join(args.output_dir, 'model_best.pth')
-    if not os.path.exists(best_path):
-        torch.save(model.state_dict(), best_path)
-        print(f'  -> Saved final model as best checkpoint: {best_path}')
+    state = model.state_dict()
+    torch.save(state, quantized_path)
+    torch.save(state, best_path)
+    print(f'  -> Saved quantized deployment model: {quantized_path}')
+    print(f'  -> Updated evaluation checkpoint: {best_path}')
 
     print(f'Training complete. Best PSNR: {best_psnr:.2f} dB')
 
