@@ -18,9 +18,12 @@ from pathlib import Path
 
 
 def find_gltf(root: Path) -> Path:
-    candidates = sorted(root.rglob("NewSponza_Main_glTF_003.gltf"))
-    if not candidates:
-        candidates = sorted(root.rglob("*.gltf"))
+    if root.is_file() and root.suffix.lower() == ".gltf":
+        return root
+    candidates = sorted(
+        path for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() == ".gltf"
+    )
     if not candidates:
         raise FileNotFoundError(f"No .gltf file found under {root}")
     return candidates[0]
@@ -55,6 +58,8 @@ def collect_psnr(log_root: Path) -> dict[str, dict[str, float]]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-root", type=Path, default=Path("main1_sponza"))
+    parser.add_argument("--gltf", type=Path, default=None,
+                        help="Explicit .gltf path; overrides --data-root scanning")
     parser.add_argument("--mode", choices=["all", "random"], default="all")
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--work-dir", type=Path, default=Path("runs_main1_sponza"))
@@ -70,7 +75,9 @@ def main() -> None:
     args = parser.parse_args()
 
     script_dir = Path(__file__).resolve().parent
-    gltf_path = find_gltf(args.data_root.resolve())
+    gltf_path = find_gltf(
+        args.gltf.resolve() if args.gltf is not None else args.data_root.resolve()
+    )
     count = material_count(gltf_path)
     if count == 0:
         raise RuntimeError(f"No materials found in {gltf_path}")
