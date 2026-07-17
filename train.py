@@ -128,6 +128,10 @@ def main():
                         help='Path to grid_config.json. Defaults to the file next to train.py')
     parser.add_argument('--batch_size', type=int, default=65536,
                         help='Number of random pixel samples per iteration')
+    parser.add_argument('--crop_size', type=int, default=256,
+                        help='Side length of each random training crop')
+    parser.add_argument('--crops_per_batch', type=int, default=8,
+                        help='Number of random crops per batch; set to 0 for random texels')
     parser.add_argument('--max_iter', type=int, default=20000,
                         help='Total training iterations')
     parser.add_argument('--lr', type=float, default=0.01,
@@ -243,22 +247,39 @@ def main():
     for step in range(args.max_iter):
         model.current_iter = step
 
-        # Randomly sample pixel positions and mip levels
-        ys = torch.randint(0, H, (args.batch_size,), device=device)
-        xs = torch.randint(0, W, (args.batch_size,), device=device)
+        # Sample eight random spatial crops by default, matching the paper.
+        # A zero crops_per_batch keeps the legacy random-texel fallback.
+        if args.crops_per_batch > 0:
+            crop_size = min(args.crop_size, H, W)
+            crop_count = args.crops_per_batch
+            origin_y = torch.randint(0, max(1, H - crop_size + 1), (crop_count,), device=device)
+            origin_x = torch.randint(0, max(1, W - crop_size + 1), (crop_count,), device=device)
+            local_y = torch.arange(crop_size, device=device).view(1, -1).expand(crop_count, -1)
+            local_x = torch.arange(crop_size, device=device).view(1, -1).expand(crop_count, -1)
+            ys = (origin_y.view(-1, 1) + local_y).reshape(-1)
+            xs = (origin_x.view(-1, 1) + local_x).reshape(-1)
+        else:
+            ys = torch.randint(0, H, (args.batch_size,), device=device)
+            xs = torch.randint(0, W, (args.batch_size,), device=device)
+        sample_count = ys.shape[0]
 
         if args.lod_sampling == 'fixed0':
-            lods = torch.zeros(args.batch_size, dtype=torch.long, device=device)
+            lods = torch.zeros(sample_count, dtype=torch.long, device=device)
         elif args.lod_sampling == 'exp':
-            lods = torch.multinomial(lod_probs, args.batch_size, replacement=True).to(device)
+            lods = torch.multinomial(lod_probs, sample_count, replacement=True).to(device)
+            uniform_mask = torch.rand(sample_count, device=device) < 0.05
+            if uniform_mask.any():
+                lods[uniform_mask] = torch.randint(
+                    0, num_lods, (int(uniform_mask.sum().item()),), device=device
+                )
         else:  # uniform
-            lods = torch.randint(0, num_lods, (args.batch_size,), device=device)
+            lods = torch.randint(0, num_lods, (sample_count,), device=device)
 
         u = xs.float() / W
         v = ys.float() / H
         uv = torch.stack([u, v], dim=1)
         if args.mip_target_mode == 'trilinear' and args.lod_sampling != 'fixed0':
-            lod_values = torch.clamp(lods.float() + torch.rand(args.batch_size, device=device), max=float(num_lods - 1))
+            lod_values = torch.clamp(lods.float() + torch.rand(sample_count, device=device), max=float(num_lods - 1))
         else:
             lod_values = lods.float()
 
@@ -285,7 +306,7 @@ def main():
         if args.boundary_continuity_weight > 0.0:
             continuity_loss = boundary_continuity_loss(
                 model,
-                args.batch_size,
+                sample_count,
                 device,
                 boundary_loss_weights,
                 args.boundary_band_width,
@@ -297,7 +318,7 @@ def main():
             delta_loss = transition_delta_loss(
                 model,
                 dataset,
-                args.batch_size,
+                sample_count,
                 device,
                 boundary_loss_weights,
                 args.transition_delta_band_width,

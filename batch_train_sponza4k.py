@@ -77,6 +77,8 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Print commands without running them")
 
     parser.add_argument("--batch_size", type=int, default=65536)
+    parser.add_argument("--crop_size", type=int, default=256)
+    parser.add_argument("--crops_per_batch", type=int, default=8)
     parser.add_argument("--max_iter", type=int, default=40000)
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--network_lr", type=float, default=0.005)
@@ -182,6 +184,10 @@ def main() -> None:
                     str(grid_config),
                     "--batch_size",
                     str(args.batch_size),
+                    "--crop_size",
+                    str(args.crop_size),
+                    "--crops_per_batch",
+                    str(args.crops_per_batch),
                     "--max_iter",
                     str(args.max_iter),
                     "--lr",
