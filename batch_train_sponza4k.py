@@ -63,6 +63,7 @@ def run_command(cmd: list[str], log_path: Path | None = None, dry_run: bool = Fa
             process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, bufsize=1,
+                env={**os.environ, "PYTHONUNBUFFERED": "1"},
             )
             assert process.stdout is not None
             for line in process.stdout:

@@ -354,10 +354,11 @@ def main():
                     f'[{step:5d}/{args.max_iter}]  loss={loss.item():.6f}  '
                     f'recon={reconstruction_loss.item():.6f}  '
                     f'boundary={continuity_loss.item():.6f}  '
-                    f'transition={delta_loss.item():.6f}  lr={current_lr:.2e}'
+                    f'transition={delta_loss.item():.6f}  lr={current_lr:.2e}',
+                    flush=True,
                 )
             else:
-                print(f'[{step:5d}/{args.max_iter}]  loss={loss.item():.6f}  lr={current_lr:.2e}')
+                print(f'[{step:5d}/{args.max_iter}]  loss={loss.item():.6f}  lr={current_lr:.2e}', flush=True)
 
         # Evaluate full PSNR periodically
         if args.eval_interval > 0 and step % args.eval_interval == 0 and step > 0:
