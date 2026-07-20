@@ -43,7 +43,7 @@ def main():
         n_frequencies=args.n_frequencies,
         use_tiled_encoding=True,
         default_save_bits=192,
-        default_quantize_bits=16,
+        default_quantize_bits=4,
     ).to(device)
     model.eval()
 
@@ -62,10 +62,13 @@ def main():
         'n_input_dims': model.n_input_dims,
         'positional_encoding_dims': 12,
         'lod_dims': 1,
-        'grid_feature_dim': 12,
+        'grid_feature_dim': {
+            'high_resolution': int(model.grid_feature_dims['0'][model.high_res_grid_indices[0]].item()),
+            'low_resolution': int(model.grid_feature_dims['0'][1 - model.high_res_grid_indices[0]].item()),
+        },
         'large_samples_per_level': 4,
         'small_samples_per_level': 1,
-        'quantize_bits': 16,
+        'quantize_bits': sorted({int(cfg['quantize_bits']) for level in model.grid_configs.values() for cfg in level}),
         'channel_order': [
             'basecolor_r', 'basecolor_g', 'basecolor_b',
             'metalness',
