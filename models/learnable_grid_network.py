@@ -72,10 +72,6 @@ class LearnableGridNetwork(NTCModel):
         use_tiled_encoding: bool = False,
         tile_size: int = 8,
         n_frequencies: int = 5,
-        # --- Boundary / wrap constraints ---
-        wrap_boundary_constraint: bool = True,
-        wrap_boundary_strength: float = 1.0,
-        wrap_boundary_interval: int = 16,
     ):
         super().__init__()
 
@@ -107,11 +103,6 @@ class LearnableGridNetwork(NTCModel):
         # ── Build PE component ─────────────────────────────────────────
         self.pe: PositionalEncoding = build_pe(pe_cfg)
         print(f"[PE] {pe_cfg['type']}: output_dim={self.pe.output_dim}")
-
-        # ── Wrap boundary ───────────────────────────────────────────────
-        self.wrap_boundary_constraint = bool(wrap_boundary_constraint)
-        self.wrap_boundary_strength = float(wrap_boundary_strength)
-        self.wrap_boundary_interval = max(1, int(wrap_boundary_interval))
 
         # ── Parse grid configuration ────────────────────────────────────
         if grid_config_path is not None:
@@ -548,15 +539,8 @@ class LearnableGridNetwork(NTCModel):
     # ═══════════════════════════════════════════════════════════════════
 
     def clamp_value(self):
-        apply_wrap = (
-            self.wrap_boundary_constraint
-            and self.wrap_boundary_strength > 0.0
-            and (self.current_iter % self.wrap_boundary_interval == 0)
-        )
-
         with torch.no_grad():
             for level_key in self.grids:
-                level = int(level_key)
                 level_grids = self.grids[level_key]
                 level_qbits = self.grid_quantize_bits[level_key]
 
@@ -569,17 +553,6 @@ class LearnableGridNetwork(NTCModel):
 
                     params = self._get_grid_params(grid)
                     params.clamp_(min=min_q, max=max_q)
-
-                    if apply_wrap:
-                        grid_cfg = self.grid_configs[level][i]
-                        resolution = int(grid_cfg["resolution"])
-                        fdim = int(self.grid_feature_dims[level_key][i].item())
-                        self._enforce_wrap_boundary_constraint_inplace(
-                            params,
-                            resolution=resolution,
-                            feature_dim=fdim,
-                            strength=self.wrap_boundary_strength,
-                        )
 
     @torch.no_grad()
     def quantize_grids_and_freeze(self):
@@ -600,43 +573,6 @@ class LearnableGridNetwork(NTCModel):
             if name == 'params':
                 return p
         return next(grid.parameters())
-
-    def _enforce_wrap_boundary_constraint_inplace(
-        self,
-        flat_params: torch.Tensor,
-        resolution: int,
-        feature_dim: int,
-        strength: float = 1.0,
-    ) -> None:
-        strength = float(max(0.0, min(1.0, strength)))
-        if strength <= 0.0:
-            return
-
-        total = flat_params.numel()
-        area = resolution * resolution
-        padded_fdim = total // area
-        if padded_fdim * area != total:
-            raise ValueError(
-                f"flat_params size {total} not divisible by resolution^2={area}"
-            )
-
-        grid_tex = flat_params.view(resolution, resolution, padded_fdim)
-        one_minus = 1.0 - strength
-
-        left, right = grid_tex[:, 0, :].clone(), grid_tex[:, -1, :].clone()
-        lr_avg = 0.5 * (left + right)
-        grid_tex[:, 0, :] = left * one_minus + lr_avg * strength
-        grid_tex[:, -1, :] = right * one_minus + lr_avg * strength
-
-        top, bottom = grid_tex[0, :, :].clone(), grid_tex[-1, :, :].clone()
-        tb_avg = 0.5 * (top + bottom)
-        grid_tex[0, :, :] = top * one_minus + tb_avg * strength
-        grid_tex[-1, :, :] = bottom * one_minus + tb_avg * strength
-
-        # Note: corner constraint removed. Edge matching (left=right, top=bottom)
-        # already guarantees seamless wrapping at corners by transitivity.
-        # Explicitly forcing all four corners identical creates triangular artifacts
-        # when the texture content differs between corners.
 
     # ═══════════════════════════════════════════════════════════════════
     # Backward-compatible attribute access
