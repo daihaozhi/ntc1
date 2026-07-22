@@ -82,8 +82,8 @@ class CornerFourSampler(GridSampler):
         grid_uv = uv * resolution  # [B, 2]
         floor_u = torch.floor(grid_uv[:, 0]).long()
         floor_v = torch.floor(grid_uv[:, 1]).long()
-        ceil_u = (floor_u + 1) % resolution
-        ceil_v = (floor_v + 1) % resolution
+        ceil_u = torch.clamp(floor_u + 1, max=resolution - 1)
+        ceil_v = torch.clamp(floor_v + 1, max=resolution - 1)
 
         # 4 corner UVs in normalized space
         corners_uv = torch.stack([
