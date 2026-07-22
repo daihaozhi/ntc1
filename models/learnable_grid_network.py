@@ -353,12 +353,12 @@ class LearnableGridNetwork(NTCModel):
     # Grid sampling
     # ═══════════════════════════════════════════════════════════════════
 
-    def _sample_grid(self, grid, uv: torch.Tensor, resolution: int, is_high_res: bool) -> torch.Tensor:
+    def _sample_grid(self, grid, uv: torch.Tensor, resolution: int, is_high_res: bool, feature_dim: int = 0) -> torch.Tensor:
         """Sample a single grid using the configured sampler."""
         if is_high_res:
-            return self.high_res_sampler.sample(grid, uv, resolution)
+            return self.high_res_sampler.sample(grid, uv, resolution, feature_dim)
         else:
-            return self.low_res_sampler.sample(grid, uv, resolution)
+            return self.low_res_sampler.sample(grid, uv, resolution, feature_dim)
 
     def sample_features(
         self,
@@ -386,7 +386,8 @@ class LearnableGridNetwork(NTCModel):
                 grid_cfg = self.grid_configs[level][grid_index]
                 resolution = grid_cfg["resolution"]
                 is_high_res = self._is_high_res_grid(level, grid_index)
-                feat = self._sample_grid(level_grids[grid_index], uv, resolution, is_high_res)
+                fdim = int(self.grid_feature_dims[str(level)][grid_index].item())
+                feat = self._sample_grid(level_grids[grid_index], uv, resolution, is_high_res, fdim)
                 if self.quantize and self.training:
                     feat = self._simulate_quantize(feat, int(level_qbits[grid_index].item()))
                 return feat
@@ -395,6 +396,9 @@ class LearnableGridNetwork(NTCModel):
             for i, grid in enumerate(level_grids):
                 grid_cfg = self.grid_configs[level][i]
                 resolution = grid_cfg["resolution"]
+                is_high_res = self._is_high_res_grid(level, i)
+                fdim = int(self.grid_feature_dims[str(level)][i].item())
+                feat = self._sample_grid(grid, uv, resolution, is_high_res, fdim)
                 is_high_res = self._is_high_res_grid(level, i)
                 feat = self._sample_grid(grid, uv, resolution, is_high_res)
                 if self.quantize and self.training:
@@ -415,7 +419,8 @@ class LearnableGridNetwork(NTCModel):
                 grid_cfg = self.grid_configs[level_int][i]
                 resolution = grid_cfg["resolution"]
                 is_high_res = self._is_high_res_grid(level_int, i)
-                feat = self._sample_grid(grid, uv, resolution, is_high_res)
+                fdim = int(self.grid_feature_dims[level_key][i].item())
+                feat = self._sample_grid(grid, uv, resolution, is_high_res, fdim)
                 if self.quantize and self.training:
                     feat = self._simulate_quantize(feat, int(level_qbits[i].item()))
                 features.append(feat)

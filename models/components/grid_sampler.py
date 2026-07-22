@@ -30,13 +30,15 @@ class GridSampler(nn.Module):
         grid,
         uv: torch.Tensor,
         resolution: int,
+        feature_dim: int = 0,
     ) -> torch.Tensor:
         """Sample features from the grid.
 
         Args:
             grid: tcnn.Encoding object
             uv: [B, 2] in [0, 1)
-            resolution: grid resolution (for coordinate transforms)
+            resolution: grid resolution
+            feature_dim: logical feature dimension (for custom CUDA kernels)
 
         Returns:
             [B, feature_dim * output_multiplier]
@@ -53,7 +55,7 @@ class BilinearSampler(GridSampler):
 
     output_multiplier = 1
 
-    def sample(self, grid, uv: torch.Tensor, resolution: int) -> torch.Tensor:
+    def sample(self, grid, uv: torch.Tensor, resolution: int, feature_dim: int = 0) -> torch.Tensor:
         return grid(uv)
 
 
@@ -73,7 +75,7 @@ class CornerFourSampler(GridSampler):
 
     output_multiplier = 4
 
-    def sample(self, grid, uv: torch.Tensor, resolution: int) -> torch.Tensor:
+    def sample(self, grid, uv: torch.Tensor, resolution: int, feature_dim: int = 0) -> torch.Tensor:
         batch_size = uv.shape[0]
 
         # Convert UV to grid coordinates
@@ -104,41 +106,44 @@ class CornerFourSampler(GridSampler):
 # ═════════════════════════════════════════════════════════════════════════
 
 class FusedCornerFourSampler(GridSampler):
-    """Corner-four sampling with a single grid query + manual index gather.
+    """Custom CUDA kernel: single fused corner-four grid lookup.
 
-    Instead of 4 separate tcnn grid() calls, this queries the full grid once
-    and gathers corner values via index arithmetic. This reduces kernel launch
-    overhead significantly when batch sizes are large.
+    Replaces tcnn grid() entirely with a dedicated CUDA kernel that:
+    - Computes 4 corner indices from UV
+    - Looks up grid values directly from flat parameter tensor
+    - Handles multi-level packed grids
+    - Implements custom backward pass
 
-    NOTE: This sampler assumes the grid stores features as a flat dense tensor
-    accessible via tcnn's internal representation. Performance depends on
-    whether tcnn supports efficient gather.
+    This eliminates tcnn dispatch overhead and intermediate tensor
+    allocations, and reduces Python-side torch.stack/reshape costs.
     """
 
     output_multiplier = 4
 
-    def sample(self, grid, uv: torch.Tensor, resolution: int) -> torch.Tensor:
-        batch_size = uv.shape[0]
+    def sample(self, grid, uv: torch.Tensor, resolution: int, feature_dim: int = 0) -> torch.Tensor:
+        from models.components.corner_lookup_cuda import corner_four_lookup
 
-        grid_uv = uv * resolution
-        floor_u = torch.floor(grid_uv[:, 0]).long()
-        floor_v = torch.floor(grid_uv[:, 1]).long()
-        ceil_u = (floor_u + 1) % resolution
-        ceil_v = (floor_v + 1) % resolution
+        # Get grid params from tcnn's state_dict
+        params = None
+        for name, p in grid.named_parameters():
+            if name == 'params':
+                params = p
+                break
+        if params is None:
+            params = next(grid.parameters())
 
-        corners_uv = torch.stack([
-            torch.stack([floor_u.float() / resolution, floor_v.float() / resolution], dim=1),
-            torch.stack([ceil_u.float() / resolution,  floor_v.float() / resolution], dim=1),
-            torch.stack([floor_u.float() / resolution, ceil_v.float() / resolution],  dim=1),
-            torch.stack([ceil_u.float() / resolution,  ceil_v.float() / resolution],  dim=1),
-        ], dim=1)
+        # Compute n_levels and n_features from feature_dim and resolution
+        # tcnn packs feature_dim into: n_levels * n_features_per_level = feature_dim
+        # For feature_dim <= 8: n_levels=1, n_features=feature_dim
+        # For feature_dim % 4 == 0: n_features=4, n_levels=feature_dim//4
+        if feature_dim <= 8:
+            n_levels = 1
+            n_features = feature_dim
+        else:
+            n_features = 4
+            n_levels = feature_dim // 4
 
-        corners_flat = corners_uv.reshape(-1, 2)
-        corner_features = grid(corners_flat)
-
-        feature_dim = corner_features.shape[1]
-        corner_features = corner_features.reshape(batch_size, 4, feature_dim)
-        return corner_features.reshape(batch_size, -1)
+        return corner_four_lookup(uv, params, resolution, n_levels, n_features)
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -149,6 +154,7 @@ _SAMPLER_REGISTRY = {
     "bilinear": BilinearSampler,
     "corner_four": CornerFourSampler,
     "fused_corner_four": FusedCornerFourSampler,
+    "custom_cuda": FusedCornerFourSampler,  # alias — now uses custom CUDA kernel
 }
 
 
