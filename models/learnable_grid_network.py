@@ -275,9 +275,14 @@ class LearnableGridNetwork(NTCModel):
             self.level_feature_dims.append(level_dim)
 
         # ── Build MLP ──────────────────────────────────────────────
-        # Input: PE + level0_features + LOD
+        # If using dual_fused sampler, PE is already included in feature output
+        is_dual = isinstance(self.high_res_sampler, DualGridSampler)
+        if is_dual:
+            for i in range(len(self.level_feature_dims)):
+                self.level_feature_dims[i] += self.pe.output_dim
+
         single_level_dim = self.level_feature_dims[0]
-        n_input_dims = self.pe.output_dim + single_level_dim + 1
+        n_input_dims = single_level_dim + 1  # features (+PE if dual) + LOD
         self.n_input_dims = n_input_dims
         self.mlp = build_mlp(mlp_cfg, input_dim=n_input_dims)
         # Keep .network alias for backward compat (trainer.py references it)
@@ -398,7 +403,7 @@ class LearnableGridNetwork(NTCModel):
                 return feat
 
             feats = []
-            # Check for dual_fused sampler (fuses high-res + low-res in one kernel)
+            # Check for dual_fused sampler (fuses PE + high-res + low-res in one kernel)
             if self.grid_sampler_cfg.get("high_res") == "dual_fused":
                 hi_idx = self.high_res_grid_indices[level]
                 lo_idx = 1 - hi_idx
@@ -411,6 +416,9 @@ class LearnableGridNetwork(NTCModel):
                     level_grids[hi_idx], level_grids[lo_idx],
                     cfg_hi["resolution"], fdim_hi,
                     cfg_lo["resolution"], fdim_lo,
+                    n_freq=self.pe_cfg.get("n_frequencies", 5),
+                    tiled=self.pe_cfg.get("tiled", True),
+                    tile_size=self.pe_cfg.get("tile_size", 8),
                 )
                 if self.quantize and self.training:
                     feat = self._simulate_quantize(feat, int(level_qbits[hi_idx].item()))
@@ -472,22 +480,24 @@ class LearnableGridNetwork(NTCModel):
         mip = lod * (self.num_mip_levels - 1)
         level_idx = self._compute_level_index(mip)
 
-        # Positional encoding via pluggable component
-        pos_encoding = self.pe(uv)
+        # Grid features — dual_fused already includes PE in output
+        is_dual = isinstance(self.high_res_sampler, DualGridSampler)
 
-        # Grid features: only the active level.
-        # Levels may have different feature dims (e.g. level 0 = 100D, level 1 = 60D).
-        # We pad to the maximum (level 0) so the MLP always sees the same input size.
+        if is_dual:
+            # PE is fused inside the kernel
+            pos_encoding = None
+        else:
+            pos_encoding = self.pe(uv)
+
         max_dim = self.level_feature_dims[0]
         features = torch.zeros(
             x.shape[0], max_dim,
-            device=x.device, dtype=pos_encoding.dtype,
+            device=x.device, dtype=torch.float32,
         )
         for l in range(len(self.grid_configs)):
             mask = (level_idx.squeeze(1) == l)
             if mask.any():
                 feat = self.sample_features(uv[mask], level=l)
-                # Pad if this level has fewer features than level 0
                 if feat.shape[1] < max_dim:
                     pad = max_dim - feat.shape[1]
                     feat = torch.cat([
@@ -496,7 +506,11 @@ class LearnableGridNetwork(NTCModel):
                     ], dim=1)
                 features[mask] = feat.to(features.dtype)
 
-        combined = torch.cat([pos_encoding, features, lod], dim=1)
+        if is_dual:
+            combined = torch.cat([features, lod], dim=1)
+        else:
+            combined = torch.cat([pos_encoding, features, lod], dim=1)
+
         return self.mlp(combined)
 
     # ═══════════════════════════════════════════════════════════════════

@@ -151,18 +151,23 @@ class FusedCornerFourSampler(GridSampler):
 # ═════════════════════════════════════════════════════════════════════════
 
 class DualGridSampler(GridSampler):
-    """Fused dual-grid: high-res corner-four + low-res bilinear in one kernel.
+    """Fused dual-grid: PE + high-res corner-four + low-res bilinear in one kernel.
 
-    Operates at the level level — takes both grids, returns concatenated
-    features [B, 4*fdim_high + fdim_low]. Eliminates one kernel launch
-    and the torch.cat between high-res and low-res grid outputs.
+    Single kernel launch replaces:
+      1. Triangle-wave positional encoding
+      2. High-res corner-four grid lookup
+      3. Low-res bilinear grid lookup
+      4. torch.cat of all three
+
+    Output: [B, pe_dim + 4*fdim_high + fdim_low]
     """
 
     output_multiplier = 0  # Not used; per-call output size varies
 
     @staticmethod
-    def sample_dual(uv, grid_high, grid_low, res_high, fdim_high, res_low, fdim_low):
-        from models.components.dual_grid_lookup_cuda import dual_grid_lookup
+    def sample_dual(uv, grid_high, grid_low, res_high, fdim_high, res_low, fdim_low,
+                    n_freq=5, tiled=True, tile_size=8):
+        from models.components.dual_grid_lookup_cuda import pe_dual_grid_lookup
 
         def _params(g):
             for n, p in g.named_parameters():
@@ -170,9 +175,10 @@ class DualGridSampler(GridSampler):
                     return p
             return next(g.parameters())
 
-        return dual_grid_lookup(
+        return pe_dual_grid_lookup(
             uv,
             _params(grid_high), _params(grid_low),
+            n_freq, tiled, tile_size,
             res_high, fdim_high, res_low, fdim_low,
         )
 
