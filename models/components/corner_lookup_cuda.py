@@ -3,32 +3,23 @@
 Replaces tcnn grid() with a single kernel that:
 1. Computes 4 corner indices from UV
 2. Looks up grid values directly from flat parameter tensor
-3. Handles both forward and backward in one fused operation
-
-This eliminates:
-- Intermediate tensor allocations (corners_flat, corner_features)
-- tcnn's generic encoding dispatch overhead
-- Separate kernel launches for grid lookup
+3. Handles multi-level packed grids
+4. Implements custom backward pass
 
 Usage:
     from models.components.corner_lookup_cuda import corner_four_lookup
-    features = corner_four_lookup(uv, grid_params, resolution)  # [B, 4*D]
+    features = corner_four_lookup(uv, grid_params, resolution, n_levels, n_features)
 """
 
 import torch
 from torch.utils.cpp_extension import load_inline
 
 
-# ═════════════════════════════════════════════════════════════════════════
-# CUDA source — single kernel for forward + backward
-# ═════════════════════════════════════════════════════════════════════════
-
 _cuda_source = r"""
 #include <torch/extension.h>
 #include <cuda_runtime.h>
 
-// Forward: UV [B, 2] + grid_params [L*R*R*F] -> output [B, 4*L*F]
-// L = n_levels (packing), F = n_features_per_level
+// Forward: UV [B,2] + grid [L*R*R*F] -> output [B, 4*L*F]
 __global__ void corner_lookup_forward_kernel(
     const float* __restrict__ uv,
     const float* __restrict__ grid,
@@ -51,7 +42,6 @@ __global__ void corner_lookup_forward_kernel(
 
     for (int l = 0; l < L; l++) {
         const float* level_grid = grid + l * level_stride;
-        int row_stride = R * F;
 
         int idx00 = (fv * R + fu) * F;
         int idx10 = (fv * R + cu) * F;
@@ -109,7 +99,7 @@ __global__ void corner_lookup_backward_kernel(
     }
 }
 
-// Launcher wrappers — now support multi-level packing
+// Launcher wrappers
 torch::Tensor corner_lookup_forward(
     torch::Tensor uv,
     torch::Tensor grid,
@@ -121,8 +111,8 @@ torch::Tensor corner_lookup_forward(
     int R = (int)resolution;
     int L = (int)n_levels;
     int F = (int)n_features_per_level;
-
     int out_dim = L * F;
+
     auto output = torch::empty({B, 4 * out_dim}, uv.options());
 
     int threads = 256;
@@ -134,7 +124,6 @@ torch::Tensor corner_lookup_forward(
         output.data_ptr<float>(),
         B, R, L, F
     );
-
     return output;
 }
 
@@ -162,28 +151,19 @@ torch::Tensor corner_lookup_backward(
         grad_grid.data_ptr<float>(),
         B, R, L, F
     );
-
     return grad_grid;
-}
-
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("forward", &corner_lookup_forward, "Corner lookup forward");
-    m.def("backward", &corner_lookup_backward, "Corner lookup backward");
 }
 """
 
+# C++ declarations only (no PYBIND11_MODULE — load_inline generates it via `functions`)
 _cpp_source = """
+#include <torch/extension.h>
 torch::Tensor corner_lookup_forward(torch::Tensor uv, torch::Tensor grid, int64_t resolution, int64_t n_levels, int64_t n_features_per_level);
 torch::Tensor corner_lookup_backward(torch::Tensor grad_output, torch::Tensor uv, int64_t resolution, int64_t n_levels, int64_t n_features_per_level, int64_t total_params);
 """
 
-
-# ═════════════════════════════════════════════════════════════════════════
-# JIT-compiled module (lazy init)
-# ═════════════════════════════════════════════════════════════════════════
-
+# Lazy-init compiled module
 _corner_module = None
-
 
 def _get_module():
     global _corner_module
@@ -198,10 +178,6 @@ def _get_module():
         )
     return _corner_module
 
-
-# ═════════════════════════════════════════════════════════════════════════
-# PyTorch autograd Function
-# ═════════════════════════════════════════════════════════════════════════
 
 class CornerLookupFunction(torch.autograd.Function):
     """Fused corner-four grid lookup with custom backward."""
@@ -239,8 +215,8 @@ def corner_four_lookup(uv, grid_params, resolution, n_levels=1, n_features_per_l
         uv: [B, 2] normalized [0, 1)
         grid_params: [n_levels * R * R * n_features_per_level]
         resolution: grid resolution R
-        n_levels: number of packed levels in the grid
-        n_features_per_level: features per level (auto-detected if None)
+        n_levels: number of packed levels
+        n_features_per_level: features per level (auto if None)
     Returns:
         [B, 4 * n_levels * n_features_per_level]
     """
