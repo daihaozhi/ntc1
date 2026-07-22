@@ -183,6 +183,14 @@ class LearnableGridNetwork(NTCModel):
                 end = int(round((l + 1) * self.num_mip_levels / num_fg_levels))
                 self.level_mip_ranges.append([start, end])
 
+        # Cache mip boundaries as persistent GPU buffer (avoids CPU tensor
+        # allocation inside CUDA graph capture).
+        boundaries_list = [r[0] for r in self.level_mip_ranges] + [self.num_mip_levels]
+        self.register_buffer(
+            '_mip_boundaries',
+            torch.tensor(boundaries_list, dtype=torch.float32),
+        )
+
         # ── Build grid samplers ────────────────────────────────────
         high_res_type = grid_sampler_cfg.get("high_res", "corner_four")
         low_res_type = grid_sampler_cfg.get("low_res", "bilinear")
@@ -415,10 +423,7 @@ class LearnableGridNetwork(NTCModel):
 
     def _compute_level_index(self, mip: torch.Tensor) -> torch.Tensor:
         """Map continuous mip → grid level index via bucketize."""
-        boundaries = torch.tensor(
-            [r[0] for r in self.level_mip_ranges] + [self.num_mip_levels],
-            dtype=torch.float32, device=mip.device,
-        )
+        boundaries = self._mip_boundaries.to(device=mip.device, dtype=torch.float32)
         idx = torch.bucketize(mip, boundaries) - 1
         return idx.clamp(min=0, max=len(self.grid_configs) - 1)
 
@@ -436,7 +441,7 @@ class LearnableGridNetwork(NTCModel):
             [B, output_dim] material channels
         """
         uv = torch.remainder(x[:, 0:2], 1.0)
-        lod = x[:, [2]]
+        lod = x[:, 2:3]
 
         mip = lod * (self.num_mip_levels - 1)
         level_idx = self._compute_level_index(mip)
