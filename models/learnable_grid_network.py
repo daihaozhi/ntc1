@@ -132,20 +132,35 @@ class LearnableGridNetwork(NTCModel):
                 self.level_mip_ranges.append([mip_lo, mip_hi])
                 self.num_mip_levels = max(self.num_mip_levels, mip_hi)
                 level_configs = []
-                # Per-feature-grid defaults (shared by all resolutions in this level)
-                fg_channels = fg_cfg.get("channels", None)
-                fg_save_bits = fg_cfg.get("save_bits", default_save_bits)
-                fg_quantize_bits = fg_cfg.get("quantize_bits", default_quantize_bits)
-                for res in fg_cfg["resolutions"]:
+                # Per-feature-grid fields: scalar = shared, list = per-resolution
+                resolutions = fg_cfg["resolutions"]
+                n_grids = len(resolutions)
+
+                def _per_grid(field, default):
+                    """If field is a list, index by grid; if scalar, broadcast."""
+                    val = fg_cfg.get(field, default)
+                    if isinstance(val, list):
+                        if len(val) != n_grids:
+                            raise ValueError(
+                                f"{field} list length {len(val)} != resolutions count {n_grids}"
+                            )
+                        return val
+                    return [val] * n_grids
+
+                channels_list = _per_grid("channels", None)
+                save_bits_list = _per_grid("save_bits", default_save_bits)
+                quantize_bits_list = _per_grid("quantize_bits", default_quantize_bits)
+
+                for i, res in enumerate(resolutions):
                     cfg = {"resolution": res}
-                    # If 'channels' provided directly, use it; otherwise derive from save/quantize bits
-                    if fg_channels is not None:
-                        cfg["channels"] = fg_channels
-                        cfg["save_bits"] = fg_channels * fg_quantize_bits
-                        cfg["quantize_bits"] = fg_quantize_bits
+                    if channels_list[i] is not None:
+                        cfg["channels"] = channels_list[i]
+                        qb = quantize_bits_list[i]
+                        cfg["quantize_bits"] = qb
+                        cfg["save_bits"] = channels_list[i] * qb
                     else:
-                        cfg["save_bits"] = fg_save_bits
-                        cfg["quantize_bits"] = fg_quantize_bits
+                        cfg["save_bits"] = save_bits_list[i]
+                        cfg["quantize_bits"] = quantize_bits_list[i]
                     level_configs.append(cfg)
                 parsed[fg_idx] = level_configs
             grid_configs = parsed
