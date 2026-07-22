@@ -146,10 +146,17 @@ class Trainer:
             crop_count = self.crops_per_batch
             origin_y = torch.randint(0, max(1, self.H - crop_size + 1), (crop_count,), device=self.device)
             origin_x = torch.randint(0, max(1, self.W - crop_size + 1), (crop_count,), device=self.device)
-            local_y = torch.arange(crop_size, device=self.device).view(1, -1).expand(crop_count, -1)
-            local_x = torch.arange(crop_size, device=self.device).view(1, -1).expand(crop_count, -1)
-            ys = (origin_y.view(-1, 1) + local_y).reshape(-1)
-            xs = (origin_x.view(-1, 1) + local_x).reshape(-1)
+            # Build the full Cartesian crop.  Pairing two 1-D ranges here only
+            # samples the crop diagonal and leaves two large triangular regions
+            # of the texture almost entirely unsupervised.
+            local_y = torch.arange(crop_size, device=self.device).view(1, crop_size, 1)
+            local_x = torch.arange(crop_size, device=self.device).view(1, 1, crop_size)
+            ys = (
+                origin_y.view(-1, 1, 1) + local_y
+            ).expand(-1, -1, crop_size).reshape(-1)
+            xs = (
+                origin_x.view(-1, 1, 1) + local_x
+            ).expand(-1, crop_size, -1).reshape(-1)
         else:
             ys = torch.randint(0, self.H, (self.batch_size,), device=self.device)
             xs = torch.randint(0, self.W, (self.batch_size,), device=self.device)
@@ -202,7 +209,8 @@ class Trainer:
     def _get_sample_count(self) -> int:
         """Number of samples per training step."""
         if self.crops_per_batch > 0:
-            return min(self.crop_size, self.H, self.W) * self.crops_per_batch
+            crop_size = min(self.crop_size, self.H, self.W)
+            return crop_size * crop_size * self.crops_per_batch
         return self.batch_size
 
     def train_step(self) -> dict[str, float]:
