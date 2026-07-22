@@ -633,13 +633,10 @@ class LearnableGridNetwork(NTCModel):
         grid_tex[0, :, :] = top * one_minus + tb_avg * strength
         grid_tex[-1, :, :] = bottom * one_minus + tb_avg * strength
 
-        c00, c01 = grid_tex[0, 0, :].clone(), grid_tex[0, -1, :].clone()
-        c10, c11 = grid_tex[-1, 0, :].clone(), grid_tex[-1, -1, :].clone()
-        corner_avg = 0.25 * (c00 + c01 + c10 + c11)
-        grid_tex[0, 0, :] = c00 * one_minus + corner_avg * strength
-        grid_tex[0, -1, :] = c01 * one_minus + corner_avg * strength
-        grid_tex[-1, 0, :] = c10 * one_minus + corner_avg * strength
-        grid_tex[-1, -1, :] = c11 * one_minus + corner_avg * strength
+        # Note: corner constraint removed. Edge matching (left=right, top=bottom)
+        # already guarantees seamless wrapping at corners by transitivity.
+        # Explicitly forcing all four corners identical creates triangular artifacts
+        # when the texture content differs between corners.
 
     # ═══════════════════════════════════════════════════════════════════
     # Backward-compatible attribute access
