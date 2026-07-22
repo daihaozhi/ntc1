@@ -198,10 +198,10 @@ class Trainer:
     # ── CUDA Graph support ────────────────────────────────────────
 
     def _get_sample_count(self) -> int:
-        """Number of samples per training step (fixed for graph capture)."""
+        """Number of samples per training step (matches _sample_coords output)."""
         if self.crops_per_batch > 0:
-            crop_size = min(self.crop_size, self.H, self.W)
-            return crop_size * crop_size * self.crops_per_batch
+            # _sample_coords generates crops_per_batch strips of crop_size pixels each
+            return min(self.crop_size, self.H, self.W) * self.crops_per_batch
         return self.batch_size
 
     def _refill_pool(self) -> None:
