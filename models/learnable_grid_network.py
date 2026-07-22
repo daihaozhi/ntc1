@@ -28,7 +28,7 @@ except ImportError:
 from models.base import NTCModel
 from models.components.mlp import HardGELU, build_mlp
 from models.components.pe import build_pe, PositionalEncoding
-from models.components.grid_sampler import build_grid_sampler, GridSampler
+from models.components.grid_sampler import build_grid_sampler, GridSampler, DualGridSampler
 
 
 class LearnableGridNetwork(NTCModel):
@@ -393,14 +393,30 @@ class LearnableGridNetwork(NTCModel):
                 return feat
 
             feats = []
+            # Check for dual_fused sampler (fuses high-res + low-res in one kernel)
+            if self.grid_sampler_cfg.get("high_res") == "dual_fused":
+                hi_idx = self.high_res_grid_indices[level]
+                lo_idx = 1 - hi_idx
+                cfg_hi = self.grid_configs[level][hi_idx]
+                cfg_lo = self.grid_configs[level][lo_idx]
+                fdim_hi = int(self.grid_feature_dims[str(level)][hi_idx].item())
+                fdim_lo = int(self.grid_feature_dims[str(level)][lo_idx].item())
+                feat = DualGridSampler.sample_dual(
+                    uv,
+                    level_grids[hi_idx], level_grids[lo_idx],
+                    cfg_hi["resolution"], fdim_hi,
+                    cfg_lo["resolution"], fdim_lo,
+                )
+                if self.quantize and self.training:
+                    feat = self._simulate_quantize(feat, int(level_qbits[hi_idx].item()))
+                return feat
+
             for i, grid in enumerate(level_grids):
                 grid_cfg = self.grid_configs[level][i]
                 resolution = grid_cfg["resolution"]
                 is_high_res = self._is_high_res_grid(level, i)
                 fdim = int(self.grid_feature_dims[str(level)][i].item())
                 feat = self._sample_grid(grid, uv, resolution, is_high_res, fdim)
-                is_high_res = self._is_high_res_grid(level, i)
-                feat = self._sample_grid(grid, uv, resolution, is_high_res)
                 if self.quantize and self.training:
                     feat = self._simulate_quantize(feat, int(level_qbits[i].item()))
                 feats.append(feat)

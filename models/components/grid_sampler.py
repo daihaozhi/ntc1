@@ -147,6 +147,37 @@ class FusedCornerFourSampler(GridSampler):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Dual-grid fused sampler (single kernel for high-res + low-res)
+# ═════════════════════════════════════════════════════════════════════════
+
+class DualGridSampler(GridSampler):
+    """Fused dual-grid: high-res corner-four + low-res bilinear in one kernel.
+
+    Operates at the level level — takes both grids, returns concatenated
+    features [B, 4*fdim_high + fdim_low]. Eliminates one kernel launch
+    and the torch.cat between high-res and low-res grid outputs.
+    """
+
+    output_multiplier = 0  # Not used; per-call output size varies
+
+    @staticmethod
+    def sample_dual(uv, grid_high, grid_low, res_high, fdim_high, res_low, fdim_low):
+        from models.components.dual_grid_lookup_cuda import dual_grid_lookup
+
+        def _params(g):
+            for n, p in g.named_parameters():
+                if n == 'params':
+                    return p
+            return next(g.parameters())
+
+        return dual_grid_lookup(
+            uv,
+            _params(grid_high), _params(grid_low),
+            res_high, fdim_high, res_low, fdim_low,
+        )
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Factory
 # ═════════════════════════════════════════════════════════════════════════
 
@@ -154,7 +185,8 @@ _SAMPLER_REGISTRY = {
     "bilinear": BilinearSampler,
     "corner_four": CornerFourSampler,
     "fused_corner_four": FusedCornerFourSampler,
-    "custom_cuda": FusedCornerFourSampler,  # alias — now uses custom CUDA kernel
+    "custom_cuda": FusedCornerFourSampler,
+    "dual_fused": DualGridSampler,
 }
 
 

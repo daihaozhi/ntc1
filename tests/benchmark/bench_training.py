@@ -96,7 +96,7 @@ def main():
     # Component overrides
     parser.add_argument("--pe_type", default=None, choices=["torch_triangle", "tcnn_triangle"])
     parser.add_argument("--mlp_type", default=None, choices=["torch_linear", "tcnn_cutlass"])
-    parser.add_argument("--grid_sampler_type", default=None, choices=["corner_four", "bilinear", "fused_corner_four", "custom_cuda"])
+    parser.add_argument("--grid_sampler_type", default=None, choices=["corner_four", "bilinear", "fused_corner_four", "custom_cuda", "dual_fused"])
     parser.add_argument("--config", default=None, help="YAML config file (for component settings)")
     args = parser.parse_args()
 
