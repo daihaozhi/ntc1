@@ -119,7 +119,7 @@ class Trainer:
         network_params = list(self.model.network.parameters())
         optimizer_params = [{"params": network_params, "lr": network_lr}]
 
-        # Grid parameters — works for both LearnableGridNetwork and TCNNModel
+        # Grid parameters — works for LearnableGridNetwork
         if hasattr(self.model, "grids"):
             for level_key in self.model.grids:
                 for grid in self.model.grids[level_key]:

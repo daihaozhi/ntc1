@@ -1,7 +1,5 @@
 """Unified NTC training entry point.
 
-Supports both LearnableGridNetwork and TCNNModel backends via --model flag.
-
 Usage:
     python scripts/train.py --config configs/baseline_learnable_4096.yaml
     python scripts/train.py --model learnable_grid --data_dir datasets/xxx --texture_resolution 4096
@@ -57,7 +55,7 @@ def main():
     parser.add_argument("--config", type=str, default=None,
                         help="YAML/JSON config file (overrides CLI args)")
     parser.add_argument("--model", type=str, default="learnable_grid",
-                        choices=["learnable_grid", "tcnn"],
+                        choices=["learnable_grid"],
                         help="Model architecture")
     parser.add_argument("--data_dir", type=str, default=None,
                         help="Directory containing texture images")
@@ -123,12 +121,10 @@ def main():
 
     # ── Model ────────────────────────────────────────────────────────
     if model_type == "learnable_grid":
-        # New component-based API: pass cfg dicts directly
         pe_cfg = cfg.get("pe", {})
         mlp_cfg = cfg.get("mlp", {})
         grid_sampler_cfg = cfg.get("grid_sampler", {})
 
-        # Fallback: build component cfgs from flat params if not in YAML
         if not pe_cfg:
             pe_cfg = {
                 "type": "torch_triangle",
@@ -157,13 +153,8 @@ def main():
             default_quantize_bits=4 if texture_resolution == 4096 else 16,
             max_iter=int(_get("max_iter", 40000)),
         ).to(device)
-    elif model_type == "tcnn":
-        raise NotImplementedError(
-            "TCNNModel requires external configs.py and utils.py from the DDGI project. "
-            "Use 'learnable_grid' for now."
-        )
     else:
-        raise ValueError(f"Unknown model: {model_type}")
+        raise ValueError(f"Unknown model type: {model_type}")
 
     print(f"Model: {model_type}, params: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
     print(f"  PE: {model.pe_cfg['type']}, MLP: {model.mlp_cfg['type']}, "
