@@ -92,6 +92,7 @@ def main():
     parser.add_argument("--warmup", type=int, default=10, help="Warmup steps")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--output", default=None, help="Save results to JSON")
+    parser.add_argument("--cuda-graph", action="store_true", help="Enable CUDA graph capture for training step")
     # Component overrides
     parser.add_argument("--pe_type", default=None, choices=["torch_triangle", "tcnn_triangle"])
     parser.add_argument("--mlp_type", default=None, choices=["torch_linear", "tcnn_cutlass"])
@@ -146,6 +147,7 @@ def main():
         eval_interval=0,
         save_interval=0,
         device=device,
+        use_cuda_graph=args.cuda_graph,
     )
 
     # Warmup

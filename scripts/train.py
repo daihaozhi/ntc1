@@ -88,6 +88,7 @@ def main():
     parser.add_argument("--eval_interval", type=int, default=1000)
     parser.add_argument("--save_interval", type=int, default=5000)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--cuda-graph", action="store_true", help="Enable CUDA graph capture")
     args = parser.parse_args()
 
     # Load config file if provided
@@ -189,6 +190,7 @@ def main():
         save_interval=int(_get("save_interval", 5000)),
         output_dir=output_dir,
         device=device,
+        use_cuda_graph=bool(_get("cuda_graph", False)),
     )
 
     summary = trainer.run()
