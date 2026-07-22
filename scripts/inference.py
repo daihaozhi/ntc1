@@ -39,6 +39,12 @@ def main():
                         help='Number of frequencies (must match training config)')
     parser.add_argument('--batch_size', type=int, default=65536,
                         help='Batch size for reconstruction')
+    parser.add_argument('--mlp_type', type=str, default='torch_linear',
+                        choices=['torch_linear', 'tcnn_cutlass'],
+                        help='MLP type (must match training config)')
+    parser.add_argument('--grid_sampler_type', type=str, default='corner_four',
+                        choices=['corner_four', 'bilinear', 'custom_cuda', 'dual_fused'],
+                        help='Grid sampler type (must match training config)')
     parser.add_argument('--device', type=str, default='cuda',
                         help='Device (cuda / cpu)')
     args = parser.parse_args()
@@ -62,13 +68,12 @@ def main():
     model = LearnableGridNetwork(
         grid_config_path=grid_config_path,
         texture_resolution=args.texture_resolution,
+        pe_cfg={"type": "torch_triangle", "n_frequencies": args.n_frequencies, "tiled": True, "tile_size": 8},
+        mlp_cfg={"type": args.mlp_type, "hidden_dim": args.hidden_dim, "num_hidden_layers": args.num_hidden_layers, "output_dim": 8},
+        grid_sampler_cfg={"high_res": args.grid_sampler_type, "low_res": "bilinear"},
         output_dim=8,
-        hidden_dim=args.hidden_dim,
-        num_hidden_layers=args.num_hidden_layers,
-        n_frequencies=args.n_frequencies,
-        use_tiled_encoding=True,
-        default_save_bits=192,
-        default_quantize_bits=16,
+        default_save_bits=48,
+        default_quantize_bits=4,
     ).to(device)
     model.eval()
 
