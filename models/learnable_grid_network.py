@@ -297,7 +297,10 @@ class LearnableGridNetwork(NTCModel):
                 self.level_feature_dims[i] += self.pe.output_dim
 
         single_level_dim = self.level_feature_dims[0]
-        n_input_dims = single_level_dim + 1  # features (+PE if dual) + LOD
+        if is_dual:
+            n_input_dims = single_level_dim + 1  # PE already in features
+        else:
+            n_input_dims = self.pe.output_dim + single_level_dim + 1  # PE + features + LOD
         self.n_input_dims = n_input_dims
         self.mlp = build_mlp(mlp_cfg, input_dim=n_input_dims)
         # Keep .network alias for backward compat (trainer.py references it)
