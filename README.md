@@ -20,38 +20,66 @@ MLP: 73 → 64 → 64 → 8
 basecolor.rgb(3) + metalness(1) + normal.rgb(3) + roughness(1)
 ```
 
+## Pluggable Components
+
+The model is built from three swappable components, selectable via YAML config:
+
+| Component | Options | Config Key |
+|-----------|---------|------------|
+| **Positional Encoding** | `torch_triangle`, `tcnn_triangle` | `pe.type` |
+| **MLP Decoder** | `torch_linear`, `tcnn_cutlass` | `mlp.type` |
+| **Grid Sampler** | `corner_four`, `bilinear`, `fused_corner_four` | `grid_sampler.high_res` |
+
+```yaml
+# Example: all-PyTorch baseline
+pe:
+  type: torch_triangle
+  n_frequencies: 5
+  tiled: true
+  tile_size: 8
+
+mlp:
+  type: torch_linear
+  hidden_dim: 64
+  num_hidden_layers: 2
+  output_dim: 8
+
+grid_sampler:
+  high_res: corner_four
+  low_res: bilinear
+```
+
 ## Project Structure
 
 ```
 ntc1/
-├── models/                 # Model implementations
+├── models/
 │   ├── base.py             # Abstract NTCModel interface
-│   ├── learnable_grid_network.py  # PyTorch PE + MLP + tcnn Grid (main)
-│   └── tcnn_model.py       # Full tcnn (requires DDGI externals)
+│   ├── learnable_grid_network.py  # Main model (uses pluggable components)
+│   ├── tcnn_model.py       # Legacy full-tcnn model (needs DDGI externals)
+│   └── components/         # Pluggable PE, MLP, Grid Sampler
+│       ├── pe.py           # TorchTriangleWavePE, TcnnTriangleWavePE
+│       ├── mlp.py          # TorchMLP, TcnnCutlassMLP
+│       └── grid_sampler.py # CornerFour, Bilinear, FusedCornerFour
 ├── engine/                 # Training & evaluation library
 │   ├── dataset.py          # TextureDataset with mipmap chain
-│   ├── trainer.py          # Unified training loop
+│   ├── trainer.py          # Unified training loop (model-agnostic)
 │   ├── evaluator.py        # PSNR metrics, reconstruction
 │   └── exporter.py         # Grid + MLP export for runtime
 ├── scripts/                # CLI entry points
-│   ├── train.py            # Unified training (--config or CLI args)
+│   ├── train.py            # Unified training (--config or CLI)
 │   ├── inference.py        # Texture reconstruction
 │   ├── export.py           # Export runtime assets
-│   ├── eval_grid_level.py  # Per-level PSNR evaluation
-│   ├── eval_mip_transition.py  # Mip transition quality
-│   ├── analyze_grid.py     # Grid texture statistics
-│   └── batch_*.py          # Sponza4K batch processing
-├── tests/
-│   └── benchmark/
-│       ├── bench_forward.py    # Forward pass timing
-│       └── bench_training.py   # Training step throughput
+│   └── ...
+├── tests/benchmark/
+│   ├── bench_forward.py    # Forward pass timing
+│   └── bench_training.py   # Training throughput
 ├── configs/
-│   ├── baseline_learnable_4096.yaml  # Baseline config
-│   ├── baseline_tcnn_4096.yaml       # (future) TCNN config
-│   └── grid/
-│       ├── grid_1024.json
-│       ├── grid_2048.json
-│       └── grid_4096.json
+│   ├── baseline_learnable_4096.yaml
+│   ├── opt_tcnn_pe_4096.yaml
+│   ├── opt_tcnn_mlp_4096.yaml
+│   ├── opt_fused_all_4096.yaml
+│   └── grid/{1024,2048,4096}.json
 └── experiments/            # Experiment logs (git-ignored)
 ```
 
@@ -108,13 +136,50 @@ python scripts/inference.py `
   --texture_resolution 4096
 ```
 
-## Optimization Workflow
+## Optimization Workflow (no branching needed)
 
-1. **Establish baseline**: `python -m tests.benchmark.bench_training --output baseline.json`
-2. **Create experiment branch**: `git checkout -b opt/my-optimization`
-3. **Make changes**, run benchmark: `python -m tests.benchmark.bench_training --output opt.json`
-4. **Compare**: `python -m tests.benchmark.compare baseline.json opt.json`
-5. **Record**: add row to `experiments/results.csv`
+All optimizations are selectable via YAML config. No git branching required — just switch the config file and compare.
+
+### Step 1: Establish baseline
+
+```bash
+python -m tests.benchmark.bench_training \
+    --texture_resolution 4096 --max_iter 200 \
+    --output baseline_training.json
+```
+
+### Step 2: Test an optimization
+
+```bash
+# Test tcnn TriangleWave PE
+python scripts/train.py --config configs/opt_tcnn_pe_4096.yaml --data_dir data/my_material
+
+# Or test tcnn CutlassMLP
+python scripts/train.py --config configs/opt_tcnn_mlp_4096.yaml --data_dir data/my_material
+
+# Or test everything fused
+python scripts/train.py --config configs/opt_fused_all_4096.yaml --data_dir data/my_material
+```
+
+### Step 3: Compare results
+
+All configs produce a summary dict at the end. Record in CSV:
+
+```csv
+experiment,pe_type,mlp_type,samples_per_sec,best_psnr,time_min
+baseline,torch_triangle,torch_linear,1250000,38.2,45.3
+opt_pe,tcnn_triangle,torch_linear,1900000,38.0,32.1
+opt_all,tcnn_triangle,tcnn_cutlass,3400000,37.8,18.7
+```
+
+### Adding a new component
+
+1. Implement in `models/components/` following the abstract interface
+2. Register in the factory function (e.g., `build_pe`)
+3. Add a YAML config with `type: your_new_type`
+4. Run benchmark and record results
+
+No merge conflicts — all code lives on `main`.
 
 ### Key Metrics
 

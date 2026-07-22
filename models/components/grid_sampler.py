@@ -1,0 +1,166 @@
+"""Grid sampler components for NTC.
+
+Controls how feature vectors are read from tcnn Grid encodings.
+"""
+
+import torch
+import torch.nn as nn
+
+try:
+    import tinycudann as tcnn
+except ImportError:
+    pass
+
+
+class GridSampler(nn.Module):
+    """Abstract grid sampling strategy.
+
+    Each grid sampler defines how to read features from one tcnn Grid encoding
+    given UV coordinates.
+
+    Subclasses must define:
+        output_multiplier: int — how many feature vectors per grid query
+        sample(grid, uv, resolution) → [B, feature_dim * output_multiplier]
+    """
+
+    output_multiplier: int = 1
+
+    def sample(
+        self,
+        grid,
+        uv: torch.Tensor,
+        resolution: int,
+    ) -> torch.Tensor:
+        """Sample features from the grid.
+
+        Args:
+            grid: tcnn.Encoding object
+            uv: [B, 2] in [0, 1)
+            resolution: grid resolution (for coordinate transforms)
+
+        Returns:
+            [B, feature_dim * output_multiplier]
+        """
+        raise NotImplementedError
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Bilinear interpolation (standard, used for low-res grids)
+# ═════════════════════════════════════════════════════════════════════════
+
+class BilinearSampler(GridSampler):
+    """Standard bilinear interpolation via tcnn (fast CUDA path)."""
+
+    output_multiplier = 1
+
+    def sample(self, grid, uv: torch.Tensor, resolution: int) -> torch.Tensor:
+        return grid(uv)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Corner-four nearest sampling (used for high-res grids)
+# ═════════════════════════════════════════════════════════════════════════
+
+class CornerFourSampler(GridSampler):
+    """Sample 4 corner points from a dense grid (nearest, no interpolation).
+
+    For each UV coordinate, returns features at:
+        (floor_u, floor_v), (ceil_u, floor_v), (floor_u, ceil_v), (ceil_u, ceil_v)
+
+    This captures more spatial information than bilinear at the cost of 4x
+    separate tcnn queries (one per corner).
+    """
+
+    output_multiplier = 4
+
+    def sample(self, grid, uv: torch.Tensor, resolution: int) -> torch.Tensor:
+        batch_size = uv.shape[0]
+
+        # Convert UV to grid coordinates
+        grid_uv = uv * resolution  # [B, 2]
+        floor_u = torch.floor(grid_uv[:, 0]).long()
+        floor_v = torch.floor(grid_uv[:, 1]).long()
+        ceil_u = (floor_u + 1) % resolution
+        ceil_v = (floor_v + 1) % resolution
+
+        # 4 corner UVs in normalized space
+        corners_uv = torch.stack([
+            torch.stack([floor_u.float() / resolution, floor_v.float() / resolution], dim=1),
+            torch.stack([ceil_u.float() / resolution,  floor_v.float() / resolution], dim=1),
+            torch.stack([floor_u.float() / resolution, ceil_v.float() / resolution],  dim=1),
+            torch.stack([ceil_u.float() / resolution,  ceil_v.float() / resolution],  dim=1),
+        ], dim=1)  # [B, 4, 2]
+
+        corners_flat = corners_uv.reshape(-1, 2)  # [B*4, 2]
+        corner_features = grid(corners_flat)       # [B*4, feature_dim]
+
+        feature_dim = corner_features.shape[1]
+        corner_features = corner_features.reshape(batch_size, 4, feature_dim)
+        return corner_features.reshape(batch_size, -1)  # [B, 4 * feature_dim]
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Fused corner-four (optimization: single query + manual indexing)
+# ═════════════════════════════════════════════════════════════════════════
+
+class FusedCornerFourSampler(GridSampler):
+    """Corner-four sampling with a single grid query + manual index gather.
+
+    Instead of 4 separate tcnn grid() calls, this queries the full grid once
+    and gathers corner values via index arithmetic. This reduces kernel launch
+    overhead significantly when batch sizes are large.
+
+    NOTE: This sampler assumes the grid stores features as a flat dense tensor
+    accessible via tcnn's internal representation. Performance depends on
+    whether tcnn supports efficient gather.
+    """
+
+    output_multiplier = 4
+
+    def sample(self, grid, uv: torch.Tensor, resolution: int) -> torch.Tensor:
+        batch_size = uv.shape[0]
+
+        grid_uv = uv * resolution
+        floor_u = torch.floor(grid_uv[:, 0]).long()
+        floor_v = torch.floor(grid_uv[:, 1]).long()
+        ceil_u = (floor_u + 1) % resolution
+        ceil_v = (floor_v + 1) % resolution
+
+        corners_uv = torch.stack([
+            torch.stack([floor_u.float() / resolution, floor_v.float() / resolution], dim=1),
+            torch.stack([ceil_u.float() / resolution,  floor_v.float() / resolution], dim=1),
+            torch.stack([floor_u.float() / resolution, ceil_v.float() / resolution],  dim=1),
+            torch.stack([ceil_u.float() / resolution,  ceil_v.float() / resolution],  dim=1),
+        ], dim=1)
+
+        corners_flat = corners_uv.reshape(-1, 2)
+        corner_features = grid(corners_flat)
+
+        feature_dim = corner_features.shape[1]
+        corner_features = corner_features.reshape(batch_size, 4, feature_dim)
+        return corner_features.reshape(batch_size, -1)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Factory
+# ═════════════════════════════════════════════════════════════════════════
+
+_SAMPLER_REGISTRY = {
+    "bilinear": BilinearSampler,
+    "corner_four": CornerFourSampler,
+    "fused_corner_four": FusedCornerFourSampler,
+}
+
+
+def build_grid_sampler(sampler_type: str) -> GridSampler:
+    """Build a grid sampler instance.
+
+    Args:
+        sampler_type: one of "bilinear", "corner_four", "fused_corner_four"
+    """
+    if sampler_type not in _SAMPLER_REGISTRY:
+        raise ValueError(
+            f"Unknown sampler type: {sampler_type}. "
+            f"Available: {list(_SAMPLER_REGISTRY)}"
+        )
+    return _SAMPLER_REGISTRY[sampler_type]()

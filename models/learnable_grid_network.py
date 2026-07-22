@@ -1,21 +1,45 @@
+"""Learnable Grid Network — modular NTC model.
+
+Uses pluggable components for positional encoding, MLP decoder, and grid
+sampling. Backward-compatible with the original flat-parameter constructor.
+
+Architecture:
+    UV (2D) → [PE] → features (12D)
+    UV (2D) → [Grid Pyramid, LOD-gated] → features (60D)
+    LOD (1D) → passthrough
+    → concat → 73D → [MLP] → 8D material channels
+"""
+
+from __future__ import annotations
+
 import json
 import math
-import json
+from typing import Optional
+
 import torch
 import torch.nn as nn
-import tinycudann as tcnn
+
+try:
+    import tinycudann as tcnn
+    HAS_TCNN = True
+except ImportError:
+    HAS_TCNN = False
+
+from models.base import NTCModel
+from models.components.mlp import HardGELU, build_mlp
+from models.components.pe import build_pe, PositionalEncoding
+from models.components.grid_sampler import build_grid_sampler, GridSampler
 
 
-class HardGELU(nn.Module):
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.where(
-            x < -1.5,
-            torch.zeros_like(x),
-            torch.where(x > 1.5, x, (x / 3.0) * (x + 1.5)),
-        )
+class LearnableGridNetwork(NTCModel):
+    """NTC model with learnable feature grids + MLP decoder.
 
+    Uses pluggable PE, MLP, and grid sampler components selectable via
+    config dicts or backward-compatible flat parameters.
+    """
 
-class LearnableGridNetwork(nn.Module):
+    model_type = "learnable_grid"
+
     DEFAULT_GRID_RESOLUTIONS = {
         0: [256, 128],
         1: [64, 32],
@@ -25,11 +49,17 @@ class LearnableGridNetwork(nn.Module):
 
     def __init__(
         self,
+        # Grid configuration
         grid_configs: dict[int, list[dict]] | None = None,
         grid_config_path: str | None = None,
         texture_resolution: int = 1024,
         default_save_bits: int = 192,
         default_quantize_bits: int = 16,
+        # Component configs (new, preferred API)
+        pe_cfg: dict | None = None,
+        mlp_cfg: dict | None = None,
+        grid_sampler_cfg: dict | None = None,
+        # --- Backward-compatible flat params (mapped to component configs) ---
         output_dim: int = 8,
         hidden_dim: int = 64,
         num_hidden_layers: int = 2,
@@ -42,26 +72,48 @@ class LearnableGridNetwork(nn.Module):
         use_tiled_encoding: bool = False,
         tile_size: int = 8,
         n_frequencies: int = 5,
+        # --- Boundary / wrap constraints ---
         wrap_boundary_constraint: bool = True,
         wrap_boundary_strength: float = 1.0,
         wrap_boundary_interval: int = 16,
     ):
         super().__init__()
 
-        # Tiled positional encoding configuration
-        self.use_tiled_encoding = use_tiled_encoding
-        self.tile_size = tile_size
-        self.n_frequencies = n_frequencies
+        # ── Component configs: new dict API takes precedence over flat params ──
+        if pe_cfg is None:
+            pe_cfg = {
+                "type": "torch_triangle",
+                "n_frequencies": n_frequencies,
+                "tiled": use_tiled_encoding,
+                "tile_size": tile_size,
+            }
+        if mlp_cfg is None:
+            mlp_cfg = {
+                "type": "torch_linear",
+                "hidden_dim": hidden_dim,
+                "num_hidden_layers": num_hidden_layers,
+                "output_dim": output_dim,
+            }
+        if grid_sampler_cfg is None:
+            grid_sampler_cfg = {
+                "high_res": "corner_four",
+                "low_res": "bilinear",
+            }
 
+        self.pe_cfg = pe_cfg
+        self.mlp_cfg = mlp_cfg
+        self.grid_sampler_cfg = grid_sampler_cfg
+
+        # ── Build PE component ─────────────────────────────────────────
+        self.pe: PositionalEncoding = build_pe(pe_cfg)
+        print(f"[PE] {pe_cfg['type']}: output_dim={self.pe.output_dim}")
+
+        # ── Wrap boundary ───────────────────────────────────────────────
         self.wrap_boundary_constraint = bool(wrap_boundary_constraint)
         self.wrap_boundary_strength = float(wrap_boundary_strength)
         self.wrap_boundary_interval = max(1, int(wrap_boundary_interval))
-        
-        if self.use_tiled_encoding:
-            print(f"Using Tiled Positional Encoding with tile_size={tile_size}x{tile_size}, n_frequencies={n_frequencies}")
-        else:
-            print("Using standard TriangleWave Positional Encoding")
 
+        # ── Parse grid configuration ────────────────────────────────────
         if grid_config_path is not None:
             with open(grid_config_path, "r", encoding="utf-8") as f:
                 raw_config = json.load(f)
@@ -72,7 +124,6 @@ class LearnableGridNetwork(nn.Module):
                     f"Available: {list(raw_config.keys())}"
                 )
             tex_cfg = raw_config[tex_key]
-            # Parse per-feature-grid configs with mip ranges
             parsed = {}
             self.level_mip_ranges = []
             self.num_mip_levels = 0
@@ -98,23 +149,20 @@ class LearnableGridNetwork(nn.Module):
             default_save_bits=default_save_bits,
             default_quantize_bits=default_quantize_bits,
         )
-        
-        # Automatically identify the higher-resolution grid in each level
+
+        # Identify high-res grid per level
         self.high_res_grid_indices = {}
         for level, grid_cfg_list in self.grid_configs.items():
             if len(grid_cfg_list) >= 2:
-                # Find the grid with the highest resolution
-                max_res_idx = 0
-                max_res = grid_cfg_list[0]["resolution"]
-                for i, cfg in enumerate(grid_cfg_list):
-                    if cfg["resolution"] > max_res:
-                        max_res = cfg["resolution"]
-                        max_res_idx = i
+                max_res_idx = max(
+                    range(len(grid_cfg_list)),
+                    key=lambda i: grid_cfg_list[i]["resolution"],
+                )
                 self.high_res_grid_indices[level] = max_res_idx
             elif len(grid_cfg_list) == 1:
-                # Only one grid, treat it as high-res
                 self.high_res_grid_indices[level] = 0
-        
+
+        # ── State ──────────────────────────────────────────────────
         self.output_dim = output_dim
         self.quantize = quantize
         self.max_iter = max(1, int(max_iter))
@@ -124,10 +172,10 @@ class LearnableGridNetwork(nn.Module):
         self._qat_noise_mult_end = float(qat_noise_mult_end)
         self._qat_noise_warmup_frac = float(qat_noise_warmup_frac)
 
-        # Fallback when no config-based mip info (e.g., grid_configs passed directly)
+        # Fallback mip ranges
         if self.level_mip_ranges is None:
             if self.num_mip_levels == 0:
-                self.num_mip_levels = 11  # default for 1024 texture
+                self.num_mip_levels = 11
             num_fg_levels = len(self.grid_configs)
             self.level_mip_ranges = []
             for l in range(num_fg_levels):
@@ -135,12 +183,22 @@ class LearnableGridNetwork(nn.Module):
                 end = int(round((l + 1) * self.num_mip_levels / num_fg_levels))
                 self.level_mip_ranges.append([start, end])
 
+        # ── Build grid samplers ────────────────────────────────────
+        high_res_type = grid_sampler_cfg.get("high_res", "corner_four")
+        low_res_type = grid_sampler_cfg.get("low_res", "bilinear")
+        self.high_res_sampler: GridSampler = build_grid_sampler(high_res_type)
+        self.low_res_sampler: GridSampler = build_grid_sampler(low_res_type)
+        print(
+            f"[GridSampler] high_res={high_res_type} (x{self.high_res_sampler.output_multiplier}), "
+            f"low_res={low_res_type} (x{self.low_res_sampler.output_multiplier})"
+        )
+
+        # ── Build feature grids ────────────────────────────────────
         self.grids = nn.ModuleDict()
         self.grid_save_bits = nn.ModuleDict()
         self.grid_quantize_bits = nn.ModuleDict()
         self.grid_feature_dims = nn.ModuleDict()
-        total_feature_dim = 0
-        self.level_feature_dims = []  # per-level feature dimension
+        self.level_feature_dims = []
 
         for level, grid_cfg_list in self.grid_configs.items():
             level_grids = nn.ModuleList()
@@ -149,41 +207,34 @@ class LearnableGridNetwork(nn.Module):
             level_feature_dims = nn.ParameterList()
             level_dim = 0
 
-            for grid_cfg in grid_cfg_list:
+            for i, grid_cfg in enumerate(grid_cfg_list):
                 resolution = int(grid_cfg["resolution"])
                 save_bits = int(grid_cfg["save_bits"])
                 quantize_bits = int(grid_cfg["quantize_bits"])
                 feature_dim = save_bits // quantize_bits
-                
-                # Determine if this is the high-res grid in this level
-                is_high_res = (len(grid_cfg_list) >= 2 and 
-                              grid_cfg_list.index(grid_cfg) == self.high_res_grid_indices.get(level, 0))
-                
-                # High-res grid outputs 4x features (4 corners), low-res output 1x
-                if is_high_res:
-                    total_feature_dim += feature_dim * 4
-                    level_dim += feature_dim * 4
-                else:
-                    total_feature_dim += feature_dim
-                    level_dim += feature_dim
 
-                # Use Nearest for high-res grid (we'll manually sample corners), Linear for low-res
+                is_high_res = self._is_high_res_grid(level, i)
+                mult = (
+                    self.high_res_sampler.output_multiplier
+                    if is_high_res
+                    else self.low_res_sampler.output_multiplier
+                )
+                total_feature_dim = feature_dim * mult
+                level_dim += total_feature_dim
+
+                # High-res grids use Nearest for manual corner sampling;
+                # low-res grids use Linear for built-in bilinear.
                 interp_mode = "Nearest" if is_high_res else "Linear"
 
-                # tiny-cuda-nn accepts only 1, 2, 4 or 8 features per level.
-                # Pack larger requested channel counts into same-resolution
-                # sub-levels; e.g. 12 channels become 3 x 4 features while
-                # preserving a contiguous 12-D output and identical storage.
+                # tcnn packing: feature_dim must be 1, 2, 4, 8 or multiple of 4
                 if feature_dim in (1, 2, 4, 8):
-                    packed_levels = 1
-                    packed_features = feature_dim
+                    packed_levels, packed_features = 1, feature_dim
                 elif feature_dim % 4 == 0:
-                    packed_levels = feature_dim // 4
-                    packed_features = 4
+                    packed_levels, packed_features = feature_dim // 4, 4
                 else:
                     raise ValueError(
-                        f"feature_dim={feature_dim} cannot be represented by tiny-cuda-nn; "
-                        "use 1, 2, 4, 8, or a multiple of 4 channels"
+                        f"feature_dim={feature_dim} not supported by tcnn; "
+                        "use 1, 2, 4, 8 or a multiple of 4"
                     )
 
                 level_grids.append(
@@ -210,18 +261,20 @@ class LearnableGridNetwork(nn.Module):
             self.grid_feature_dims[str(level)] = level_feature_dims
             self.level_feature_dims.append(level_dim)
 
-        # New network input:
-        #   single level features + position encoding + lod value
+        # ── Build MLP ──────────────────────────────────────────────
+        # Input: PE + level0_features + LOD
         single_level_dim = self.level_feature_dims[0]
-        n_input_dims = single_level_dim + (n_frequencies * 2 + 2) + 1
-        layers = []
-        in_dim = n_input_dims
-        for _ in range(num_hidden_layers):
-            layers.extend([nn.Linear(in_dim, hidden_dim), HardGELU()])
-            in_dim = hidden_dim
-        layers.append(nn.Linear(in_dim, output_dim))
-        self.network = nn.Sequential(*layers)
+        n_input_dims = self.pe.output_dim + single_level_dim + 1
         self.n_input_dims = n_input_dims
+        self.mlp = build_mlp(mlp_cfg, input_dim=n_input_dims)
+        # Keep .network alias for backward compat (trainer.py references it)
+        self.network = self.mlp.network
+        print(f"[MLP] {mlp_cfg['type']}: {n_input_dims} → {mlp_cfg.get('hidden_dim', 64)}^"
+              f"{mlp_cfg.get('num_hidden_layers', 2)} → {output_dim}")
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Grid construction helpers
+    # ═══════════════════════════════════════════════════════════════════
 
     def _build_grid_configs(
         self,
@@ -232,20 +285,16 @@ class LearnableGridNetwork(nn.Module):
         if grid_configs is None:
             return {
                 level: [
-                    {
-                        "resolution": res,
-                        "save_bits": default_save_bits,
-                        "quantize_bits": default_quantize_bits,
-                    }
+                    {"resolution": res, "save_bits": default_save_bits, "quantize_bits": default_quantize_bits}
                     for res in resolutions
                 ]
                 for level, resolutions in self.DEFAULT_GRID_RESOLUTIONS.items()
             }
 
-        normalized_configs = {}
+        normalized = {}
         for level_key, cfg_list in grid_configs.items():
             level = int(level_key)
-            normalized_configs[level] = []
+            normalized[level] = []
             for grid_cfg in cfg_list:
                 resolution = int(grid_cfg["resolution"])
                 save_bits = int(grid_cfg.get("save_bits", default_save_bits))
@@ -257,92 +306,20 @@ class LearnableGridNetwork(nn.Module):
                 if quantize_bits <= 0:
                     raise ValueError(f"quantize_bits must be positive, got {quantize_bits}")
                 if save_bits % quantize_bits != 0:
-                    raise ValueError(f"save_bits must be divisible by quantize_bits, got {save_bits} and {quantize_bits}")
+                    raise ValueError(f"save_bits must be divisible by quantize_bits")
+                normalized[level].append({
+                    "resolution": resolution,
+                    "save_bits": save_bits,
+                    "quantize_bits": quantize_bits,
+                })
+        return normalized
 
-                normalized_configs[level].append(
-                    {
-                        "resolution": resolution,
-                        "save_bits": save_bits,
-                        "quantize_bits": quantize_bits,
-                    }
-                )
+    def _is_high_res_grid(self, level: int, grid_index: int) -> bool:
+        return self.high_res_grid_indices.get(level, 0) == grid_index
 
-        return normalized_configs
-
-    def _triangle_wave_encoding(self, x: torch.Tensor) -> torch.Tensor:
-        """Compute triangle wave positional encoding.
-        
-        Triangle wave function: tri(x) = 2 * |x - floor(x + 0.5)|
-        This creates a periodic triangular waveform in [0, 1].
-        
-        For each frequency i, we compute:
-          - tri(2^i * x)
-        
-        Args:
-            x: Input coordinates [B, 2] in range [0, 1)
-            
-        Returns:
-            Encoded features [B, n_frequencies * 2 + 2]
-        """
-        batch_size = x.shape[0]
-        encoded_features = []
-        
-        for i in range(self.n_frequencies):
-            # Compute frequency scale: 2^i
-            freq_scale = 2.0 ** i
-            
-            # Apply frequency scaling
-            scaled_x = x * freq_scale  # [B, 2]
-            
-            # Triangle wave: tri(u) = 2 * |u - floor(u + 0.5)|
-            # This creates a triangular wave oscillating between 0 and 1
-            triangle = 2.0 * torch.abs(scaled_x - torch.floor(scaled_x + 0.5))
-            
-            encoded_features.append(triangle)
-        
-        encoded = torch.cat(encoded_features, dim=1)
-        constants = torch.ones((batch_size, 2), device=x.device, dtype=x.dtype)
-        return torch.cat([encoded, constants], dim=1)
-
-    def _compute_tiled_local_coords(self, uvs: torch.Tensor) -> torch.Tensor:
-        """Compute local coordinates within each tile for tiled positional encoding.
-        
-        This maps global UV coordinates to local tile coordinates:
-        - Divides the texture space into tile_size x tile_size blocks
-        - Each point is mapped to its relative position within its tile
-        - Different tiles with same relative positions get identical encodings
-        
-        Args:
-            uvs: UV coordinates [B, 2] in range [0, 1)
-            
-        Returns:
-            Local coordinates within tiles [B, 2] in range [0, 1)
-        """
-        # Scale UV by tile_size and take fractional part
-        # This effectively wraps the coordinate space every tile_size units
-        local_uvs = torch.remainder(uvs * self.tile_size, 1.0)
-        
-        return local_uvs
-
-    def _compute_positional_encoding(self, uv: torch.Tensor) -> torch.Tensor:
-        """Compute positional encoding using triangle wave.
-        
-        If tiled encoding is enabled, uses local tile coordinates.
-        Otherwise, uses global UV coordinates.
-        
-        Args:
-            uv: UV coordinates [B, 2] in range [0, 1)
-            
-        Returns:
-            Positional encoding features [B, n_frequencies * 2]
-        """
-        if self.use_tiled_encoding:
-            # Use local coordinates within tiles
-            local_uvs = self._compute_tiled_local_coords(uv)
-            return self._triangle_wave_encoding(local_uvs)
-        else:
-            # Use global UV coordinates
-            return self._triangle_wave_encoding(uv)
+    # ═══════════════════════════════════════════════════════════════════
+    # QAT helpers
+    # ═══════════════════════════════════════════════════════════════════
 
     def _qat_noise_multiplier(self) -> float:
         if self._qat_noise_schedule == "none":
@@ -355,6 +332,135 @@ class LearnableGridNetwork(nn.Module):
         p = (t - w) / max(1, T - w)
         c = 0.5 * (1.0 + math.cos(math.pi * p))
         return self._qat_noise_mult_end + (self._qat_noise_mult_start - self._qat_noise_mult_end) * c
+
+    def _simulate_quantize(self, features: torch.Tensor, quantize_bits: int) -> torch.Tensor:
+        N_k = 2 ** quantize_bits
+        Q_k = 1.0 / N_k
+        noise_range = 0.5 * Q_k
+        mult = self._qat_noise_multiplier()
+        noise = (torch.rand_like(features) * 2 - 1) * noise_range * mult
+        return features + noise
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Grid sampling
+    # ═══════════════════════════════════════════════════════════════════
+
+    def _sample_grid(self, grid, uv: torch.Tensor, resolution: int, is_high_res: bool) -> torch.Tensor:
+        """Sample a single grid using the configured sampler."""
+        if is_high_res:
+            return self.high_res_sampler.sample(grid, uv, resolution)
+        else:
+            return self.low_res_sampler.sample(grid, uv, resolution)
+
+    def sample_features(
+        self,
+        uv: torch.Tensor,
+        level: int | None = None,
+        grid_index: int | None = None,
+    ) -> torch.Tensor:
+        """Sample feature vectors from grids.
+
+        Args:
+            uv: [B, 2] normalized coordinates
+            level: specific grid level (or None for all)
+            grid_index: specific grid within level (or None for all)
+        """
+        uv = torch.remainder(uv, 1.0)
+
+        if level is not None:
+            if level not in self.grid_configs:
+                raise ValueError(f"level {level} not in {list(self.grid_configs)}")
+
+            level_grids = self.grids[str(level)]
+            level_qbits = self.grid_quantize_bits[str(level)]
+
+            if grid_index is not None:
+                grid_cfg = self.grid_configs[level][grid_index]
+                resolution = grid_cfg["resolution"]
+                is_high_res = self._is_high_res_grid(level, grid_index)
+                feat = self._sample_grid(level_grids[grid_index], uv, resolution, is_high_res)
+                if self.quantize and self.training:
+                    feat = self._simulate_quantize(feat, int(level_qbits[grid_index].item()))
+                return feat
+
+            feats = []
+            for i, grid in enumerate(level_grids):
+                grid_cfg = self.grid_configs[level][i]
+                resolution = grid_cfg["resolution"]
+                is_high_res = self._is_high_res_grid(level, i)
+                feat = self._sample_grid(grid, uv, resolution, is_high_res)
+                if self.quantize and self.training:
+                    feat = self._simulate_quantize(feat, int(level_qbits[i].item()))
+                feats.append(feat)
+            return torch.cat(feats, dim=1)
+
+        if grid_index is not None:
+            raise ValueError("grid_index requires level")
+
+        features = []
+        for level_key in self.grids:
+            level_int = int(level_key)
+            level_grids = self.grids[level_key]
+            level_qbits = self.grid_quantize_bits[level_key]
+
+            for i, grid in enumerate(level_grids):
+                grid_cfg = self.grid_configs[level_int][i]
+                resolution = grid_cfg["resolution"]
+                is_high_res = self._is_high_res_grid(level_int, i)
+                feat = self._sample_grid(grid, uv, resolution, is_high_res)
+                if self.quantize and self.training:
+                    feat = self._simulate_quantize(feat, int(level_qbits[i].item()))
+                features.append(feat)
+        return torch.cat(features, dim=1)
+
+    def _compute_level_index(self, mip: torch.Tensor) -> torch.Tensor:
+        """Map continuous mip → grid level index via bucketize."""
+        boundaries = torch.tensor(
+            [r[0] for r in self.level_mip_ranges] + [self.num_mip_levels],
+            dtype=torch.float32, device=mip.device,
+        )
+        idx = torch.bucketize(mip, boundaries) - 1
+        return idx.clamp(min=0, max=len(self.grid_configs) - 1)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Forward
+    # ═══════════════════════════════════════════════════════════════════
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: [B, 3] — (u, v, lod_normalized) in [0,1) × [0,1) × [0,1]
+
+        Returns:
+            [B, output_dim] material channels
+        """
+        uv = torch.remainder(x[:, 0:2], 1.0)
+        lod = x[:, [2]]
+
+        mip = lod * (self.num_mip_levels - 1)
+        level_idx = self._compute_level_index(mip)
+
+        # Positional encoding via pluggable component
+        pos_encoding = self.pe(uv)
+
+        # Grid features: only the active level
+        features = torch.zeros(
+            x.shape[0], self.level_feature_dims[0],
+            device=x.device, dtype=pos_encoding.dtype,
+        )
+        for l in range(len(self.grid_configs)):
+            mask = (level_idx.squeeze(1) == l)
+            if mask.any():
+                feat = self.sample_features(uv[mask], level=l)
+                features[mask] = feat.to(features.dtype)
+
+        combined = torch.cat([pos_encoding, features, lod], dim=1)
+        return self.mlp(combined)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Wrap boundary constraint
+    # ═══════════════════════════════════════════════════════════════════
 
     def clamp_value(self):
         apply_wrap = (
@@ -392,9 +498,8 @@ class LearnableGridNetwork(nn.Module):
 
     @torch.no_grad()
     def quantize_grids_and_freeze(self):
-        """Materialize the paper's final scalar quantization before MLP fine-tuning."""
+        """Materialize final scalar quantization before MLP fine-tuning."""
         for level_key in self.grids:
-            level = int(level_key)
             for i, grid in enumerate(self.grids[level_key]):
                 qbits = int(self.grid_quantize_bits[level_key][i].item())
                 n = float(2 ** qbits)
@@ -405,7 +510,7 @@ class LearnableGridNetwork(nn.Module):
                 params.copy_(min_q + indices * q)
                 params.requires_grad_(False)
 
-    def _get_grid_params(self, grid: nn.Module) -> torch.nn.Parameter:
+    def _get_grid_params(self, grid: nn.Module) -> nn.Parameter:
         for name, p in grid.named_parameters():
             if name == 'params':
                 return p
@@ -422,225 +527,50 @@ class LearnableGridNetwork(nn.Module):
         if strength <= 0.0:
             return
 
-        # tcnn may internally pad n_features_per_level; derive actual padded dim from params size
         total = flat_params.numel()
         area = resolution * resolution
         padded_fdim = total // area
         if padded_fdim * area != total:
             raise ValueError(
-                f"flat_params size {total} not divisible by resolution^2={area}. "
-                f"resolution={resolution}, feature_dim={feature_dim}"
+                f"flat_params size {total} not divisible by resolution^2={area}"
             )
 
         grid_tex = flat_params.view(resolution, resolution, padded_fdim)
         one_minus = 1.0 - strength
 
-        left = grid_tex[:, 0, :].clone()
-        right = grid_tex[:, -1, :].clone()
+        left, right = grid_tex[:, 0, :].clone(), grid_tex[:, -1, :].clone()
         lr_avg = 0.5 * (left + right)
         grid_tex[:, 0, :] = left * one_minus + lr_avg * strength
         grid_tex[:, -1, :] = right * one_minus + lr_avg * strength
 
-        top = grid_tex[0, :, :].clone()
-        bottom = grid_tex[-1, :, :].clone()
+        top, bottom = grid_tex[0, :, :].clone(), grid_tex[-1, :, :].clone()
         tb_avg = 0.5 * (top + bottom)
         grid_tex[0, :, :] = top * one_minus + tb_avg * strength
         grid_tex[-1, :, :] = bottom * one_minus + tb_avg * strength
 
-        c00 = grid_tex[0, 0, :].clone()
-        c01 = grid_tex[0, -1, :].clone()
-        c10 = grid_tex[-1, 0, :].clone()
-        c11 = grid_tex[-1, -1, :].clone()
+        c00, c01 = grid_tex[0, 0, :].clone(), grid_tex[0, -1, :].clone()
+        c10, c11 = grid_tex[-1, 0, :].clone(), grid_tex[-1, -1, :].clone()
         corner_avg = 0.25 * (c00 + c01 + c10 + c11)
         grid_tex[0, 0, :] = c00 * one_minus + corner_avg * strength
         grid_tex[0, -1, :] = c01 * one_minus + corner_avg * strength
         grid_tex[-1, 0, :] = c10 * one_minus + corner_avg * strength
         grid_tex[-1, -1, :] = c11 * one_minus + corner_avg * strength
 
-    def _simulate_quantize(self, features: torch.Tensor, quantize_bits: int) -> torch.Tensor:
-        N_k = 2 ** quantize_bits
-        Q_k = 1.0 / N_k
+    # ═══════════════════════════════════════════════════════════════════
+    # Backward-compatible attribute access
+    # ═══════════════════════════════════════════════════════════════════
 
-        noise_range = 0.5 * Q_k
-        mult = self._qat_noise_multiplier()
-        noise = (torch.rand_like(features) * 2 - 1) * noise_range * mult
-        features_noisy = features + noise
+    def _compute_positional_encoding(self, uv: torch.Tensor) -> torch.Tensor:
+        """Backward-compatible PE accessor (used by eval scripts)."""
+        return self.pe(uv)
 
-        # Paper-style simulated quantization: forward sees uniform quantization
-        # noise; the actual feature parameters are clamped after optimizer.step().
-        return features_noisy
+    # ═══════════════════════════════════════════════════════════════════
+    # Grid info accessors (used by export.py)
+    # ═══════════════════════════════════════════════════════════════════
 
-    def _is_high_res_grid(self, level: int, grid_index: int) -> bool:
-        """Check if a specific grid in a level is the high-resolution grid."""
-        return self.high_res_grid_indices.get(level, 0) == grid_index
-
-    def _sample_grid_corners(self, grid: tcnn.Encoding, uv: torch.Tensor, resolution: int) -> torch.Tensor:
-        """Sample 4 corner points from a dense grid without interpolation.
-        
-        For each UV coordinate, this returns the features at the 4 surrounding grid corners:
-        (floor_u, floor_v), (ceil_u, floor_v), (floor_u, ceil_v), (ceil_u, ceil_v)
-        
-        Args:
-            grid: tcnn Grid encoding object
-            uv: UV coordinates [B, 2] in range [0, 1)
-            resolution: Grid resolution
-            
-        Returns:
-            Features at 4 corners [B, 4 * feature_dim]
-        """
-        batch_size = uv.shape[0]
-        
-        # Convert UV to grid coordinates
-        grid_uv = uv * resolution  # [B, 2]
-        
-        # Get floor and ceil indices
-        floor_u = torch.floor(grid_uv[:, 0]).long()  # [B]
-        floor_v = torch.floor(grid_uv[:, 1]).long()  # [B]
-        ceil_u = (floor_u + 1) % resolution  # Wrap around
-        ceil_v = (floor_v + 1) % resolution  # Wrap around
-        
-        # Create 4 corner coordinates (normalized back to [0, 1))
-        corners_uv = torch.stack([
-            torch.stack([floor_u.float() / resolution, floor_v.float() / resolution], dim=1),  # bottom-left
-            torch.stack([ceil_u.float() / resolution, floor_v.float() / resolution], dim=1),   # bottom-right
-            torch.stack([floor_u.float() / resolution, ceil_v.float() / resolution], dim=1),   # top-left
-            torch.stack([ceil_u.float() / resolution, ceil_v.float() / resolution], dim=1),    # top-right
-        ], dim=1)  # [B, 4, 2]
-        
-        # Reshape for batch processing: [B*4, 2]
-        corners_uv_flat = corners_uv.reshape(-1, 2)
-        
-        # Sample all corners at once using nearest interpolation
-        # Since we're sampling at exact grid points, nearest will give us the exact values
-        corner_features = grid(corners_uv_flat)  # [B*4, feature_dim]
-        
-        # Reshape back to [B, 4, feature_dim]
-        feature_dim = corner_features.shape[1]
-        corner_features = corner_features.reshape(batch_size, 4, feature_dim)
-        
-        # Flatten to [B, 4 * feature_dim]
-        return corner_features.reshape(batch_size, -1)
-
-    def sample_features(
-        self,
-        uv: torch.Tensor,
-        level: int | None = None,
-        grid_index: int | None = None,
-    ) -> torch.Tensor:
-        uv = torch.remainder(uv, 1.0)
-
-        if level is not None:
-            if level not in self.grid_configs:
-                raise ValueError(f"level must be one of {list(self.grid_configs.keys())}, got {level}")
-
-            level_grids = self.grids[str(level)]
-            level_qbits = self.grid_quantize_bits[str(level)]
-            level_fdims = self.grid_feature_dims[str(level)]
-            
-            if grid_index is not None:
-                grid_cfg = self.grid_configs[level][grid_index]
-                resolution = grid_cfg["resolution"]
-                
-                if self._is_high_res_grid(level, grid_index):
-                    # High-res grid: sample 4 corners
-                    feat = self._sample_grid_corners(level_grids[grid_index], uv, resolution)
-                else:
-                    # Low-res grid: use bilinear interpolation via tcnn
-                    feat = level_grids[grid_index](uv)
-                
-                if self.quantize and self.training:
-                    feat = self._simulate_quantize(feat, int(level_qbits[grid_index].item()))
-                return feat
-
-            feats = []
-            for i, grid in enumerate(level_grids):
-                grid_cfg = self.grid_configs[level][i]
-                resolution = grid_cfg["resolution"]
-                
-                if self._is_high_res_grid(level, i):
-                    # High-res grid: sample 4 corners
-                    feat = self._sample_grid_corners(grid, uv, resolution)
-                else:
-                    # Low-res grid: use bilinear interpolation via tcnn
-                    feat = grid(uv)
-                
-                if self.quantize and self.training:
-                    feat = self._simulate_quantize(feat, int(level_qbits[i].item()))
-                feats.append(feat)
-            return torch.cat(feats, dim=1)
-
-        if grid_index is not None:
-            raise ValueError("grid_index can only be used together with level.")
-
-        features = []
-        for level_key in self.grids:
-            level_int = int(level_key)
-            level_grids = self.grids[level_key]
-            level_qbits = self.grid_quantize_bits[level_key]
-            
-            for i, grid in enumerate(level_grids):
-                grid_cfg = self.grid_configs[level_int][i]
-                resolution = grid_cfg["resolution"]
-                
-                if self._is_high_res_grid(level_int, i):
-                    # High-res grid: sample 4 corners
-                    feat = self._sample_grid_corners(grid, uv, resolution)
-                else:
-                    # Low-res grid: use bilinear interpolation via tcnn
-                    feat = grid(uv)
-                
-                if self.quantize and self.training:
-                    feat = self._simulate_quantize(feat, int(level_qbits[i].item()))
-                features.append(feat)
-        return torch.cat(features, dim=1)
-
-    def _compute_level_index(self, mip: torch.Tensor) -> torch.Tensor:
-        """Map continuous mip level to a single feature grid level index.
-
-        Uses bucketize with the per-level mip range boundaries.
-        E.g. level_mip_ranges = [[0,4], [4,6], [6,8], [8,11]]
-          → boundaries = [0, 4, 6, 8, 11]
-          → mip in [0,4) → level 0, [4,6) → level 1, [6,8) → level 2, [8,11) → level 3
-
-        Args:
-            mip: Mip values [B, 1], range [0, num_mip_levels)
-
-        Returns:
-            Level indices [B, 1], each in [0, num_feature_grid_levels)
-        """
-        boundaries = torch.tensor(
-            [r[0] for r in self.level_mip_ranges] + [self.num_mip_levels],
-            dtype=torch.float32, device=mip.device,
-        )
-        idx = torch.bucketize(mip, boundaries) - 1
-        return idx.clamp(min=0, max=len(self.grid_configs) - 1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        uv = torch.remainder(x[:, 0:2], 1.0)
-        lod = x[:, [2]]  # [B, 1]
-
-        mip = lod * (self.num_mip_levels - 1)  # [B, 1]
-        level_idx = self._compute_level_index(mip)  # [B, 1]
-
-        pos_encoding = self._compute_positional_encoding(uv)  # [B, n_frequencies * 2]
-
-        # Process each level group with its own grid, then reassemble
-        features = torch.zeros(x.shape[0], self.level_feature_dims[0],
-                               device=x.device, dtype=pos_encoding.dtype)
-        for l in range(len(self.grid_configs)):
-            mask = (level_idx.squeeze(1) == l)
-            if mask.any():
-                feat = self.sample_features(uv[mask], level=l)
-                features[mask] = feat.to(features.dtype)
-
-        combined = torch.cat([pos_encoding, features, lod], dim=1)
-
-        return self.network(combined)
-
-    def get_grid_params(self, level: int, grid_index: int) -> torch.nn.Parameter:
+    def get_grid_params(self, level: int, grid_index: int) -> nn.Parameter:
         if level not in self.grid_configs:
             raise ValueError(f"level must be one of {list(self.grid_configs.keys())}, got {level}")
-
         grid = self.grids[str(level)][grid_index]
         for name, param in grid.named_parameters():
             if name == "params":
@@ -650,29 +580,37 @@ class LearnableGridNetwork(nn.Module):
     def get_grid_config(self, level: int, grid_index: int) -> dict[str, int]:
         if level not in self.grid_configs:
             raise ValueError(f"level must be one of {list(self.grid_configs.keys())}, got {level}")
-
         return dict(self.grid_configs[level][grid_index])
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Quick test
+# ═══════════════════════════════════════════════════════════════════════
+
 if __name__ == "__main__":
     model = LearnableGridNetwork(
-        grid_config_path="grid_config.json",
+        grid_config_path="configs/grid/grid_1024.json",
         texture_resolution=1024,
+        pe_cfg={"type": "torch_triangle", "n_frequencies": 5, "tiled": True, "tile_size": 8},
+        mlp_cfg={"type": "torch_linear", "hidden_dim": 64, "num_hidden_layers": 2, "output_dim": 8},
+        grid_sampler_cfg={"high_res": "corner_four", "low_res": "bilinear"},
     ).cuda()
-    x = torch.rand(8, 3, device="cuda")  # (u, v, lod)
-    rgb = model(x)
 
-    print(f"input (u, v, lod) shape: {tuple(x.shape)}")
-    print(f"output rgb shape: {tuple(rgb.shape)}")
-    print(f"level_mip_ranges: {model.level_mip_ranges}")
-    print(f"num_mip_levels: {model.num_mip_levels}")
+    x = torch.rand(8, 3, device="cuda")
+    out = model(x)
+    print(f"Input: {tuple(x.shape)} → Output: {tuple(out.shape)}")
+    print(f"PE type: {model.pe_cfg['type']}, MLP type: {model.mlp_cfg['type']}")
+    print(f"Samplers: high_res={model.grid_sampler_cfg['high_res']}, low_res={model.grid_sampler_cfg['low_res']}")
+    print(f"Params: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 
-    # Test different LoD values
-    for lod_val in [0.0, 0.25, 0.5, 0.75, 1.0]:
-        x_test = torch.tensor([[0.5, 0.5, lod_val]], device="cuda")
-        out = model(x_test)
-        mip = lod_val * (model.num_mip_levels - 1)
-        print(f"  LoD={lod_val:.2f} → mip≈{mip:.1f} → rgb={out[0].cpu().detach().numpy().round(3)}")
-
-    trainable_params = sum(param.numel() for param in model.parameters() if param.requires_grad)
-    print(f"trainable parameters: {trainable_params}")
+    # Test backward compat
+    model2 = LearnableGridNetwork(
+        use_tiled_encoding=True,
+        n_frequencies=5,
+        hidden_dim=64,
+        num_hidden_layers=2,
+        output_dim=8,
+        default_save_bits=192,
+        default_quantize_bits=16,
+    )
+    print(f"Backward-compat model created: PE={model2.pe_cfg}, MLP={model2.mlp_cfg}")

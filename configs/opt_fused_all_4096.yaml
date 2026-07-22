@@ -1,0 +1,41 @@
+# Optimization: all tcnn components (TriangleWave PE + CutlassMLP)
+# Maximum theoretical speedup within the modular framework
+
+model: learnable_grid
+texture_resolution: 4096
+grid_config: configs/grid/grid_4096.json
+
+pe:
+  type: tcnn_triangle
+  n_frequencies: 5
+  tiled: false
+
+mlp:
+  type: tcnn_cutlass
+  hidden_dim: 64
+  num_hidden_layers: 2
+  output_dim: 8
+
+grid_sampler:
+  high_res: corner_four
+  low_res: bilinear
+
+quantize: true
+default_save_bits: 48
+default_quantize_bits: 4
+
+batch_size: 65536
+crop_size: 256
+crops_per_batch: 8
+max_iter: 40000
+
+lr: 0.01
+network_lr: 0.005
+
+lod_sampling: exp
+mip_target_mode: discrete
+
+eval_interval: 1000
+save_interval: 5000
+
+device: cuda

@@ -122,14 +122,36 @@ def main():
 
     # ── Model ────────────────────────────────────────────────────────
     if model_type == "learnable_grid":
+        # New component-based API: pass cfg dicts directly
+        pe_cfg = cfg.get("pe", {})
+        mlp_cfg = cfg.get("mlp", {})
+        grid_sampler_cfg = cfg.get("grid_sampler", {})
+
+        # Fallback: build component cfgs from flat params if not in YAML
+        if not pe_cfg:
+            pe_cfg = {
+                "type": "torch_triangle",
+                "n_frequencies": int(_get("n_frequencies", 5)),
+                "tiled": bool(_get("use_tiled_encoding", True)),
+                "tile_size": 8,
+            }
+        if not mlp_cfg:
+            mlp_cfg = {
+                "type": "torch_linear",
+                "hidden_dim": int(_get("hidden_dim", 64)),
+                "num_hidden_layers": int(_get("num_hidden_layers", 2)),
+                "output_dim": 8,
+            }
+        if not grid_sampler_cfg:
+            grid_sampler_cfg = {"high_res": "corner_four", "low_res": "bilinear"}
+
         model = LearnableGridNetwork(
             grid_config_path=grid_config,
             texture_resolution=texture_resolution,
+            pe_cfg=pe_cfg,
+            mlp_cfg=mlp_cfg,
+            grid_sampler_cfg=grid_sampler_cfg,
             output_dim=8,
-            hidden_dim=int(_get("hidden_dim", 64)),
-            num_hidden_layers=int(_get("num_hidden_layers", 2)),
-            n_frequencies=int(_get("n_frequencies", 5)),
-            use_tiled_encoding=bool(_get("use_tiled_encoding", True)),
             default_save_bits=48 if texture_resolution == 4096 else 192,
             default_quantize_bits=4 if texture_resolution == 4096 else 16,
             max_iter=int(_get("max_iter", 40000)),
@@ -143,6 +165,8 @@ def main():
         raise ValueError(f"Unknown model: {model_type}")
 
     print(f"Model: {model_type}, params: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    print(f"  PE: {model.pe_cfg['type']}, MLP: {model.mlp_cfg['type']}, "
+          f"Sampler: {model.grid_sampler_cfg['high_res']}/{model.grid_sampler_cfg['low_res']}")
 
     # ── Trainer ──────────────────────────────────────────────────────
     trainer = Trainer(
