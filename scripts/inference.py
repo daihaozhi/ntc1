@@ -132,7 +132,7 @@ def main():
         ref_tex = ref_material[:, :, cn_start:cn_end]
 
         if tex_type in srgb_types:
-            save_tex = pred_tex.pow(1.0 / 2.2).clamp(0.0, 1.0)
+            save_tex = pred_tex.clamp(0.0, 1.0).pow(1.0 / 2.2)
         else:
             save_tex = pred_tex.clamp(0.0, 1.0)
 
