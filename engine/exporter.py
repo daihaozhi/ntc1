@@ -6,7 +6,11 @@ from pathlib import Path
 import torch
 import numpy as np
 from PIL import Image
-from learnable_grid_network import LearnableGridNetwork
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from models.learnable_grid_network import LearnableGridNetwork
 
 
 @torch.no_grad()
@@ -32,7 +36,7 @@ def main():
 
     device = torch.device(args.device if args.device == 'cpu' or torch.cuda.is_available() else 'cpu')
     os.makedirs(args.output_dir, exist_ok=True)
-    grid_config_path = args.grid_config or str(Path(__file__).with_name('grid_config.json'))
+    grid_config_path = args.grid_config or str(Path(__file__).resolve().parents[1] / 'configs' / 'grid' / f'grid_{args.texture_resolution}.json')
 
     model = LearnableGridNetwork(
         grid_config_path=grid_config_path,

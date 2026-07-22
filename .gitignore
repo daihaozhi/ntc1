@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Experiments & outputs
+experiments/
+runs/
+runs_*/
+output/
+exported/
+reconstructed/
+*_output/
+sponza4k_ntc_batch/
+runs_sponza4k_batch/
+quick_boundary_*/
+quick_mip_transition_*/
+
+# Data
+data/
+datasets_*/
+*.dds
+
+# Checkpoints
+*.pth
+*.npz
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Config backups
+*.yaml.bak
+*.json.bak

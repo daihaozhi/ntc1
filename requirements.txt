@@ -3,4 +3,4 @@ torchvision>=0.15.0
 numpy>=1.22
 Pillow>=10.0.0
 tinycudann>=1.7
-torchtyping>=0.1.4
+PyYAML>=6.0

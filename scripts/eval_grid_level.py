@@ -8,8 +8,12 @@ import numpy as np
 import torch
 from PIL import Image
 
-from dataset import CANONICAL_CHANNEL_SLICES, CANONICAL_NUM_CHANNELS, TextureDataset
-from learnable_grid_network import LearnableGridNetwork
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))
+
+from engine.dataset import CANONICAL_CHANNEL_SLICES, CANONICAL_NUM_CHANNELS, TextureDataset
+from models.learnable_grid_network import LearnableGridNetwork
 
 
 def psnr_from_mse(mse: float) -> float:
@@ -226,7 +230,7 @@ def main() -> None:
     device = torch.device(args.device if args.device == "cpu" or torch.cuda.is_available() else "cpu")
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    grid_config_path = args.grid_config or str(Path(__file__).with_name("grid_config.json"))
+    grid_config_path = args.grid_config or str(_Path(__file__).resolve().parents[1] / "configs" / "grid" / f"grid_{args.texture_resolution}.json")
 
     dataset = TextureDataset(data_dir=args.data_dir, device=device)
     dataset.eval()

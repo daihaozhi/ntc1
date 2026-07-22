@@ -1,194 +1,137 @@
-# ntc1 Neural Texture Compression
+# ntc1 — Neural Texture Compression
 
-This repository trains compact neural material textures and exports feature grids plus MLP weights for use in the DDGI Vulkan renderer. A material is represented by a small feature-grid pyramid and a shared decoder MLP. The training input is the highest-resolution material texture set; the dataset loader builds a mipmap chain internally and can supervise the network from either discrete mip levels or trilinear continuous LOD samples.
+Train compact neural material textures and export feature grids plus MLP weights for real-time GPU decoding.
 
-## Main Scripts
+## Architecture
 
-- `prepare_sponza4k_material.py`: extracts one Intel Sponza 4K glTF material into canonical texture files.
-- `train.py`: trains one material NTC model from a texture folder.
-- `export.py`: exports trained feature grids and MLP weights for runtime decoding.
-- `inference.py`: reconstructs textures from a trained checkpoint for visual inspection.
-- `eval_grid_level.py`: forces one feature grid level during reconstruction and reports per-LOD PSNR.
-- `batch_train_sponza4k.py`: prepares, trains, and optionally exports many Sponza 4K materials.
-- `batch_reconstruct_sponza4k.py`: reconstructs many trained Sponza 4K materials for the DDGI validation scene.
-
-## Training Data
-
-`TextureDataset` loads the maximum-resolution textures in a material folder, aligns them to one resolution, converts color textures to linear space, and concatenates available maps into the canonical 11-channel layout:
-
-```text
-diffuse.rgb
-normal.rgb
-roughness
-occlusion
-metallic
-specular
-displacement
+```
+UV + LOD (3D)
+    │
+    ├── Tiled TriangleWave positional encoding (12D)
+    ├── Feature grid pyramid (4 levels, 60D active)
+    │     ├── Large grid: 4-corner nearest sampling (48D)
+    │     └── Small grid: bilinear interpolation (12D)
+    └── Normalized LOD (1D)
+    │
+    ▼
+MLP: 73 → 64 → 64 → 8
+    │
+    ▼
+basecolor.rgb(3) + metalness(1) + normal.rgb(3) + roughness(1)
 ```
 
-It then generates a full mipmap chain with antialiased bicubic downsampling. Training can sample this chain in two modes:
+## Project Structure
 
-- `--mip_target_mode discrete`: choose an integer mip level and train against one texel from that mip. This is the default and preserves the previous behavior.
-- `--mip_target_mode trilinear`: choose an integer mip bucket, add a random fractional offset, bilinearly sample both adjacent mip levels, then linearly blend between them. The model input receives the same continuous normalized LOD value.
+```
+ntc1/
+├── models/                 # Model implementations
+│   ├── base.py             # Abstract NTCModel interface
+│   ├── learnable_grid_network.py  # PyTorch PE + MLP + tcnn Grid (main)
+│   └── tcnn_model.py       # Full tcnn (requires DDGI externals)
+├── engine/                 # Training & evaluation library
+│   ├── dataset.py          # TextureDataset with mipmap chain
+│   ├── trainer.py          # Unified training loop
+│   ├── evaluator.py        # PSNR metrics, reconstruction
+│   └── exporter.py         # Grid + MLP export for runtime
+├── scripts/                # CLI entry points
+│   ├── train.py            # Unified training (--config or CLI args)
+│   ├── inference.py        # Texture reconstruction
+│   ├── export.py           # Export runtime assets
+│   ├── eval_grid_level.py  # Per-level PSNR evaluation
+│   ├── eval_mip_transition.py  # Mip transition quality
+│   ├── analyze_grid.py     # Grid texture statistics
+│   └── batch_*.py          # Sponza4K batch processing
+├── tests/
+│   └── benchmark/
+│       ├── bench_forward.py    # Forward pass timing
+│       └── bench_training.py   # Training step throughput
+├── configs/
+│   ├── baseline_learnable_4096.yaml  # Baseline config
+│   ├── baseline_tcnn_4096.yaml       # (future) TCNN config
+│   └── grid/
+│       ├── grid_1024.json
+│       ├── grid_2048.json
+│       └── grid_4096.json
+└── experiments/            # Experiment logs (git-ignored)
+```
 
-Internally, `TextureDataset.sample_discrete_lod()` implements the integer mip path and `TextureDataset.sample_trilinear_lod()` implements the continuous LOD target path.
+## Quick Start
 
-LOD buckets are selected with `--lod_sampling`:
-
-- `exp`: exponential distribution biased toward high-resolution levels.
-- `uniform`: uniform over all mip levels.
-- `fixed0`: only train the base level.
-
-## Train One Material
+### 1. Baseline Training
 
 ```powershell
-python train.py `
-  --data_dir ".\datasets\sponza4k_arch_stone_wall_01_4096" `
-  --output_dir ".\runs\sponza4k_arch_stone_wall_01_4096" `
+python scripts/train.py --config configs/baseline_learnable_4096.yaml --data_dir data/my_material
+```
+
+Or with CLI overrides:
+
+```powershell
+python scripts/train.py `
+  --model learnable_grid `
+  --data_dir data/my_material `
   --texture_resolution 4096 `
-  --batch_size 65536 `
   --max_iter 40000 `
-  --lod_sampling uniform `
+  --batch_size 65536 `
+  --lod_sampling exp `
   --mip_target_mode trilinear `
-  --eval_interval 1000 `
-  --save_interval 5000 `
-  --device cuda
+  --output_dir runs/my_material
 ```
 
-Use `--mip_target_mode discrete` when you want the original integer-mip reconstruction target. Use `trilinear` when the runtime path needs smoother LOD-conditioned decoding.
-
-To reduce visible jumps when switching between feature grid levels, add a small boundary continuity loss:
+### 2. Run Benchmarks
 
 ```powershell
-python train.py `
-  --data_dir ".\datasets\sponza4k_arch_stone_wall_01_4096" `
-  --output_dir ".\runs\sponza4k_arch_stone_wall_01_4096" `
-  --texture_resolution 4096 `
-  --lod_sampling uniform `
-  --mip_target_mode trilinear `
-  --boundary_continuity_weight 0.03 `
-  --boundary_loss_preset normal_roughness `
-  --device cuda
+# Forward pass timing
+python -m tests.benchmark.bench_forward --texture_resolution 4096
+
+# Training throughput
+python -m tests.benchmark.bench_training --texture_resolution 4096 --max_iter 200
 ```
 
-The boundary term samples the mip boundaries from `grid_config.json` and forces adjacent grid levels to produce similar decoder outputs at those LODs. The `normal_roughness` preset emphasizes channels that most often turn small discontinuities into visible shimmer. Keep the global weight small at first, such as `0.01` to `0.05`, then check both single-level PSNR and `eval_grid_level.py --boundary`. For targeted experiments, pass custom JSON weights, for example `--boundary_loss_weights '{"normal":2.0,"roughness":6.0,"diffuse":0.25}'`.
-
-## Batch Train Sponza 4K
+### 3. Batch Train Sponza 4K
 
 ```powershell
-python batch_train_sponza4k.py `
-  --gltf "<asset_root>\main1_sponza\NewSponza_Main_glTF_003.gltf" `
-  --work_dir ".\runs_sponza4k_batch" `
+python scripts/batch_train_sponza4k.py `
+  --gltf "<path>/NewSponza_Main_glTF_003.gltf" `
+  --work_dir runs_sponza4k `
   --resolution 4096 `
   --export `
-  --lod_sampling uniform `
-  --mip_target_mode trilinear `
-  --boundary_continuity_weight 0.03 `
-  --boundary_loss_preset normal_roughness `
   --device cuda
 ```
 
-The batch script creates:
-
-```text
-datasets_4096/
-runs_4096/
-exported_4096/
-logs/
-```
-
-`datasets_4096` contains prepared maximum-resolution material inputs. `runs_4096` contains checkpoints. `exported_4096` contains runtime data such as `grid_*_hi.png`, `grid_*_lo.png`, `mlp_*.bin`, and `metadata.json`.
-
-## Reconstruct and Inspect
+### 4. Reconstruct & Evaluate
 
 ```powershell
-python inference.py `
-  --data_dir ".\datasets\sponza4k_arch_stone_wall_01_4096" `
-  --checkpoint ".\runs\sponza4k_arch_stone_wall_01_4096\model_best.pth" `
-  --output_dir ".\reconstructed\sponza4k_arch_stone_wall_01_4096" `
-  --texture_resolution 4096 `
-  --device cuda
+python scripts/inference.py `
+  --data_dir data/my_material `
+  --checkpoint runs/my_material/model_best.pth `
+  --output_dir reconstructed/my_material `
+  --texture_resolution 4096
 ```
 
-For a full Sponza batch:
+## Optimization Workflow
 
-```powershell
-python batch_reconstruct_sponza4k.py `
-  --batch_dir ".\runs_sponza4k_batch" `
-  --resolution 4096 `
-  --device cuda
-```
+1. **Establish baseline**: `python -m tests.benchmark.bench_training --output baseline.json`
+2. **Create experiment branch**: `git checkout -b opt/my-optimization`
+3. **Make changes**, run benchmark: `python -m tests.benchmark.bench_training --output opt.json`
+4. **Compare**: `python -m tests.benchmark.compare baseline.json opt.json`
+5. **Record**: add row to `experiments/results.csv`
 
-The DDGI renderer can use reconstructed material textures for validation before switching to true online NTC decoding.
+### Key Metrics
 
-## Evaluate One Grid Level
+| Metric | Tool |
+|--------|------|
+| Training throughput (samples/sec) | `bench_training.py` |
+| Forward pass latency (ms) | `bench_forward.py` |
+| Peak VRAM (MB) | `bench_training.py` |
+| Final PSNR (dB) | `train.py` output |
+| Model parameters | `bench_forward.py` |
 
-To diagnose whether a nonzero feature grid level is trained well, force that level during reconstruction. By default, the script evaluates the mip range assigned to the selected level in `grid_config.json`.
+## Dependencies
 
-```powershell
-python eval_grid_level.py `
-  --data_dir ".\datasets\sponza4k_arch_stone_wall_01_4096" `
-  --checkpoint ".\runs\sponza4k_arch_stone_wall_01_4096\model_best.pth" `
-  --output_dir ".\eval_grid1\sponza4k_arch_stone_wall_01_4096" `
-  --texture_resolution 4096 `
-  --grid_level 1 `
-  --device cuda
-```
+- PyTorch >= 2.0
+- tiny-cuda-nn >= 1.7
+- NumPy, Pillow, PyYAML
 
-For a 4096 model, `grid_level 1` corresponds to LODs `[5, 7)`, so it evaluates `lod 5` and `lod 6`. The script writes reconstructed PNGs and `metrics.csv`.
+## License
 
-To check whether adjacent grid levels are continuous at their boundaries, use boundary mode:
-
-```powershell
-python eval_grid_level.py `
-  --data_dir ".\datasets\sponza4k_arch_stone_wall_01_4096" `
-  --checkpoint ".\runs\sponza4k_arch_stone_wall_01_4096\model_best.pth" `
-  --output_dir ".\eval_boundaries\sponza4k_arch_stone_wall_01_4096" `
-  --texture_resolution 4096 `
-  --boundary `
-  --device cuda
-```
-
-For a 4096 model this compares `level0/level1` at `lod 5`, `level1/level2` at `lod 7`, and `level2/level3` at `lod 10`. It writes `boundary_metrics.csv` plus left/right/difference images.
-
-## Quick Boundary Experiment
-
-Use `quick_boundary_experiment.py` to train a small subset and immediately evaluate boundary continuity. This is useful for tuning `--boundary_continuity_weight` or boundary channel weights without retraining every Sponza material.
-
-```bash
-python quick_boundary_experiment.py \
-  --gltf "main1_sponza/main_sponza/NewSponza_Main_glTF_003.gltf" \
-  --work_dir "./quick_boundary_w005" \
-  --material-ids "0" \
-  --resolution 1024 \
-  --max_iter 1200 \
-  --batch_size 32768 \
-  --lod_sampling uniform \
-  --mip_target_mode trilinear \
-  --boundary_continuity_weight 0.05 \
-  --boundary_loss_preset normal_roughness \
-  --device cuda
-```
-
-The script runs `batch_train_sponza4k.py`, then `eval_grid_level.py --boundary`, and writes `boundary_summary.csv` under the experiment directory. If the quick run skips expensive full-image evaluation, `train.py` still writes the final checkpoint as `model_best.pth` so export and boundary evaluation can continue. Use `--material-ids "0,3,8"` for a slightly broader sample or `--resolution 4096 --max_iter 3000` for a closer but heavier test.
-
-## Export Runtime Data
-
-```powershell
-python export.py `
-  --checkpoint ".\runs\sponza4k_arch_stone_wall_01_4096\model_best.pth" `
-  --output_dir ".\exported\sponza4k_arch_stone_wall_01_4096" `
-  --texture_resolution 4096 `
-  --device cuda
-```
-
-The exported feature grids follow the configured feature-grid pyramid in `grid_config.json`. The decoder MLP is shared across grid levels, and the normalized LOD is part of the network input.
-
-## Notes for the DDGI Project
-
-The DDGI Vulkan project has two useful validation paths:
-
-- reconstructed-image path: use reconstructed PNGs to check material mapping and lighting correctness.
-- online-decoder path: upload exported feature grids and MLP weights, then decode in `gbuffer.frag`.
-
-The trilinear target mode is a training-side step toward smoother runtime LOD behavior. It does not by itself guarantee continuity between different feature-grid levels; that still depends on runtime filtering, temporal accumulation, and any future grid-level boundary regularization.
+Internal research project.

@@ -1,0 +1,30 @@
+{
+  "1024": {
+    "feature_grids": [
+      {
+        "mip_range": [0, 4],
+        "resolutions": [512, 256],
+        "save_bits": 192,
+        "quantize_bits": 16
+      },
+      {
+        "mip_range": [4, 6],
+        "resolutions": [128, 64],
+        "save_bits": 192,
+        "quantize_bits": 16
+      },
+      {
+        "mip_range": [6, 8],
+        "resolutions": [32, 16],
+        "save_bits": 192,
+        "quantize_bits": 16
+      },
+      {
+        "mip_range": [8, 11],
+        "resolutions": [8, 4],
+        "save_bits": 192,
+        "quantize_bits": 16
+      }
+    ]
+  }
+}

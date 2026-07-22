@@ -1,3 +1,9 @@
+"""TCNNModel: full tcnn-based NTC model.
+
+NOTE: This model requires external modules (configs, utils) from the DDGI project.
+The imports are made optional so the rest of the ntc1 package can be used standalone.
+"""
+
 import os
 import math
 import torch
@@ -5,14 +11,23 @@ import copy
 import numpy as np
 import tinycudann as tcnn
 import torch.nn.functional as F
-from torchtyping import TensorType
 
-from configs import Config
+try:
+    from torchtyping import TensorType
+except ImportError:
+    TensorType = None
+
+try:
+    from configs import Config
+except ImportError:
+    Config = None
 
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
 
-
-from utils import pack_features, unpack_features, write_dds_r8g8b8a8
+try:
+    from utils import pack_features, unpack_features, write_dds_r8g8b8a8
+except ImportError:
+    pack_features = unpack_features = write_dds_r8g8b8a8 = None
 
 # Fixed channel order aligned with: diffuse, normal, roughness, occlusion, metallic, specular, displacement
 # Channel counts: 3, 3, 1, 1, 1, 1, 1 -> 11 channels total; missing textures are filled with 0 at train/infer
@@ -22,8 +37,9 @@ NUM_CANONICAL_CHANNELS = sum(CANONICAL_CHANNEL_COUNTS)  # 11
 
 
 class TCNNModel(torch.nn.Module):
+    model_type = "tcnn"
 
-    def __init__(self, config: Config):
+    def __init__(self, config):
         super().__init__()
 
         self.device = config.device
@@ -72,7 +88,7 @@ class TCNNModel(torch.nn.Module):
         if config.load_dir is not None:
             self.load_ckpt(config)
 
-    def init_model(self, config: Config) -> None:
+    def init_model(self, config) -> None:
 
         triangle_wave_config = {
             "n_dims_to_encode": 2,
@@ -214,7 +230,7 @@ class TCNNModel(torch.nn.Module):
         c = 0.5 * (1.0 + math.cos(math.pi * p))
         return self._qat_noise_mult_end + (self._qat_noise_mult_start - self._qat_noise_mult_end) * c
 
-    def load_ckpt(self, config: Config) -> None:
+    def load_ckpt(self, config) -> None:
         
         # TODO
         ckpt_iter = config.load_iter

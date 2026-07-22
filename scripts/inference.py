@@ -2,16 +2,20 @@ import os
 import argparse
 import math
 import os
-from pathlib import Path
+from pathlib import Path as Path
 import torch
 import numpy as np
 from PIL import Image
-from dataset import (
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))
+
+from engine.dataset import (
     TextureDataset,
     CANONICAL_CHANNEL_SLICES,
     CANONICAL_NUM_CHANNELS,
 )
-from learnable_grid_network import LearnableGridNetwork
+from models.learnable_grid_network import LearnableGridNetwork
 
 
 @torch.no_grad()
@@ -41,7 +45,7 @@ def main():
 
     device = torch.device(args.device if args.device == 'cpu' or torch.cuda.is_available() else 'cpu')
     os.makedirs(args.output_dir, exist_ok=True)
-    grid_config_path = args.grid_config or str(Path(__file__).with_name('grid_config.json'))
+    grid_config_path = args.grid_config or str(_Path(__file__).resolve().parents[1] / 'configs' / 'grid' / f'grid_{args.texture_resolution}.json')
 
     # ── Load original textures as reference ──────────────────────────
     dataset = TextureDataset(data_dir=args.data_dir, device=device)
