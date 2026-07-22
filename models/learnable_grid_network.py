@@ -444,15 +444,25 @@ class LearnableGridNetwork(NTCModel):
         # Positional encoding via pluggable component
         pos_encoding = self.pe(uv)
 
-        # Grid features: only the active level
+        # Grid features: only the active level.
+        # Levels may have different feature dims (e.g. level 0 = 100D, level 1 = 60D).
+        # We pad to the maximum (level 0) so the MLP always sees the same input size.
+        max_dim = self.level_feature_dims[0]
         features = torch.zeros(
-            x.shape[0], self.level_feature_dims[0],
+            x.shape[0], max_dim,
             device=x.device, dtype=pos_encoding.dtype,
         )
         for l in range(len(self.grid_configs)):
             mask = (level_idx.squeeze(1) == l)
             if mask.any():
                 feat = self.sample_features(uv[mask], level=l)
+                # Pad if this level has fewer features than level 0
+                if feat.shape[1] < max_dim:
+                    pad = max_dim - feat.shape[1]
+                    feat = torch.cat([
+                        feat.to(features.dtype),
+                        torch.zeros(feat.shape[0], pad, device=feat.device, dtype=features.dtype),
+                    ], dim=1)
                 features[mask] = feat.to(features.dtype)
 
         combined = torch.cat([pos_encoding, features, lod], dim=1)
