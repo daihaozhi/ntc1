@@ -37,6 +37,11 @@ def main():
                         help='Number of MLP hidden layers (must match training config)')
     parser.add_argument('--n_frequencies', type=int, default=5,
                         help='Number of frequencies (must match training config)')
+    parser.add_argument('--n_frequencies', type=int, default=5,
+                        help='Number of frequencies (must match training config)')
+    parser.add_argument('--tiled', type=str, default='true',
+                        choices=['true', 'false'],
+                        help='Tiled positional encoding (must match training config)')
     parser.add_argument('--batch_size', type=int, default=65536,
                         help='Batch size for reconstruction')
     parser.add_argument('--mlp_type', type=str, default='torch_linear',
@@ -68,7 +73,7 @@ def main():
     model = LearnableGridNetwork(
         grid_config_path=grid_config_path,
         texture_resolution=args.texture_resolution,
-        pe_cfg={"type": "torch_triangle", "n_frequencies": args.n_frequencies, "tiled": True, "tile_size": 8},
+        pe_cfg={"type": "torch_triangle", "n_frequencies": args.n_frequencies, "tiled": args.tiled == 'true', "tile_size": 8},
         mlp_cfg={"type": args.mlp_type, "hidden_dim": args.hidden_dim, "num_hidden_layers": args.num_hidden_layers, "output_dim": 8},
         grid_sampler_cfg={"high_res": args.grid_sampler_type, "low_res": "bilinear"},
         output_dim=8,
