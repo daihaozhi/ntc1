@@ -22,10 +22,9 @@ class Trainer:
     """Model-agnostic training loop for NTC.
 
     Args:
-        use_cuda_graph: If True, captures the training step as a CUDA graph
-            after warmup, eliminating per-step kernel launch overhead.
-            Requires fixed batch size and static model forward.
-        graph_pool_steps: Number of pre-generated steps in the coordinate pool.
+        use_cuda_graph: If True, wraps the model with torch.compile(mode='reduce-overhead')
+            which uses CUDA graphs internally for compatible subgraphs, reducing
+            kernel launch overhead without requiring manual graph management.
     """
 
     def __init__(
@@ -101,16 +100,19 @@ class Trainer:
         self.best_psnr = 0.0
         self._step_times: list[float] = []
 
-        # ── CUDA Graph support ─────────────────────────────────
+        # ── torch.compile support ───────────────────────────────
         self.use_cuda_graph = use_cuda_graph and self.device.type == "cuda"
-        self.graph_pool_steps = graph_pool_steps
-        self._graph: torch.cuda.CUDAGraph | None = None
-        self._graph_static_input: torch.Tensor | None = None
-        self._graph_static_gt: torch.Tensor | None = None
-        self._graph_pool_input: torch.Tensor | None = None   # [pool_steps, B, 3]
-        self._graph_pool_gt: torch.Tensor | None = None       # [pool_steps, B, 8]
-        self._graph_pool_idx: int = 0
-        self._graph_captured: bool = False
+        if self.use_cuda_graph and hasattr(torch, 'compile'):
+            print('[torch.compile] Compiling model with mode="reduce-overhead"...')
+            self.model = torch.compile(self.model, mode="reduce-overhead")
+            # Warmup compile
+            N = self._get_sample_count()
+            dummy = torch.randn(N, 3, device=self.device)
+            for _ in range(3):
+                _ = self.model(dummy)
+                _ = ((_ - torch.randn(N, 8, device=self.device)) ** 2).mean()
+            torch.cuda.synchronize()
+            print('[torch.compile] Compile warmup complete.')
 
     def _build_optimizer(self, lr: float, network_lr: float) -> None:
         """Build optimizer with separate LRs for MLP and grids."""
@@ -195,119 +197,16 @@ class Trainer:
             # Select 8 output channels: basecolor.rgb, metallic, normal.rgb, roughness
             return canonical_gt[:, [0, 1, 2, 8, 3, 4, 5, 6]]
 
-    # ── CUDA Graph support ────────────────────────────────────────
+    # ── Training step ─────────────────────────────────────────────────
 
     def _get_sample_count(self) -> int:
-        """Number of samples per training step (matches _sample_coords output)."""
+        """Number of samples per training step."""
         if self.crops_per_batch > 0:
-            # _sample_coords generates crops_per_batch strips of crop_size pixels each
             return min(self.crop_size, self.H, self.W) * self.crops_per_batch
         return self.batch_size
 
-    def _refill_pool(self) -> None:
-        """Pre-generate a pool of (model_input, ground_truth) pairs."""
-        assert self._graph_pool_input is not None and self._graph_pool_gt is not None
-        N = self._get_sample_count()
-        for i in range(self.graph_pool_steps):
-            u, v, ys, xs, lods, lod_values = self._sample_coords()
-            uv = torch.stack([u, v], dim=1)
-            gt = self._get_ground_truth(uv, ys, xs, lods, lod_values)
-            lod_norm = lod_values / (self.num_lods - 1)
-            self._graph_pool_input[i] = torch.stack([u, v, lod_norm], dim=1)
-            self._graph_pool_gt[i] = gt
-        self._graph_pool_idx = 0
-        torch.cuda.synchronize()
-
-    def _init_cuda_graph(self) -> None:
-        """Warmup and capture the training step as a CUDA graph."""
-        if self._graph_captured:
-            return
-
-        N = self._get_sample_count()
-        print(f"[CUDA Graph] Capturing training step (sample_count={N:,}, pool={self.graph_pool_steps} steps)...")
-
-        # Allocate static tensors and pool
-        self._graph_static_input = torch.empty(N, 3, device=self.device, dtype=torch.float32)
-        self._graph_static_gt = torch.empty(N, 8, device=self.device, dtype=torch.float32)
-        self._graph_pool_input = torch.empty(self.graph_pool_steps, N, 3, device=self.device, dtype=torch.float32)
-        self._graph_pool_gt = torch.empty(self.graph_pool_steps, N, 8, device=self.device, dtype=torch.float32)
-
-        # Fill pool
-        self._refill_pool()
-
-        # Warmup: run a few real steps to autotune cuDNN etc.
-        for _ in range(3):
-            inp = self._graph_pool_input[self._graph_pool_idx]
-            gt = self._graph_pool_gt[self._graph_pool_idx]
-            self._graph_pool_idx += 1
-            self._graph_static_input.copy_(inp)
-            self._graph_static_gt.copy_(gt)
-            pred = self.model(self._graph_static_input)
-            loss = ((pred - self._graph_static_gt) ** 2 * self.loss_weights).mean()
-            self.optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            self.optimizer.step()
-            self.model.clamp_value()
-        torch.cuda.synchronize()
-
-        # Reset pool for capture
-        self._graph_pool_idx = 0
-        self._refill_pool()
-
-        # Capture: model forward + loss + backward + optimizer step
-        self._graph = torch.cuda.CUDAGraph()
-        self.optimizer.zero_grad(set_to_none=True)
-        with torch.cuda.graph(self._graph):
-            pred = self.model(self._graph_static_input)
-            loss = ((pred - self._graph_static_gt) ** 2 * self.loss_weights).mean()
-            loss.backward()
-            self.optimizer.step()
-
-        self._graph_captured = True
-        print("[CUDA Graph] Capture complete.")
-
-    def _train_step_cuda_graph(self) -> dict[str, float]:
-        """Training step using CUDA graph replay."""
-        # Refill pool if exhausted
-        if self._graph_pool_idx >= self.graph_pool_steps:
-            self._refill_pool()
-
-        # Copy new data into static buffers
-        inp = self._graph_pool_input[self._graph_pool_idx]
-        gt = self._graph_pool_gt[self._graph_pool_idx]
-        self._graph_pool_idx += 1
-        self._graph_static_input.copy_(inp)
-        self._graph_static_gt.copy_(gt)
-
-        # Replay captured graph (forward + loss + backward + optimizer)
-        self._graph.replay()
-
-        # Steps that must run outside the graph
-        self.model.clamp_value()
-        self.scheduler.step()
-        self.model.current_iter += 1
-
-        return {}  # loss values from graph are not accessible without a pool copy
-
-    # ── Training step ─────────────────────────────────────────────────
-
     def train_step(self) -> dict[str, float]:
         """Single training step. Returns dict of metrics."""
-        # Initialize CUDA graph on first call if enabled
-        if self.use_cuda_graph and not self._graph_captured:
-            self._init_cuda_graph()
-
-        if self._graph_captured:
-            t0 = time.perf_counter()
-            metrics = self._train_step_cuda_graph()
-            t1 = time.perf_counter()
-            self._step_times.append(t1 - t0)
-            lr = self.optimizer.param_groups[0]["lr"]
-            metrics.setdefault("loss", 0.0)
-            metrics.setdefault("recon", 0.0)
-            metrics.setdefault("lr", lr)
-            return metrics
-
         t0 = time.perf_counter()
 
         u, v, ys, xs, lods, lod_values = self._sample_coords()
