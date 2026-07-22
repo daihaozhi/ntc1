@@ -85,7 +85,7 @@ class Trainer:
         )
 
         # LoD sampling probabilities
-        lod_probs = torch.exp(-torch.arange(self.num_lods, dtype=torch.float32) * 1.0)
+        lod_probs = torch.exp(-torch.arange(self.num_lods, dtype=torch.float32, device=self.device) * 1.0)
         self.lod_probs = lod_probs / lod_probs.sum()
 
         self.best_psnr = 0.0
@@ -138,17 +138,17 @@ class Trainer:
             if self.lod_sampling == "fixed0":
                 batch_lod = torch.zeros((), dtype=torch.long, device=self.device)
             elif self.lod_sampling == "exp":
-                if torch.rand(()) < 0.05:
+                if torch.rand((), device=self.device) < 0.05:
                     batch_lod = torch.randint(0, self.num_lods, (), device=self.device)
                 else:
-                    batch_lod = torch.multinomial(self.lod_probs, 1).squeeze(0).to(self.device)
+                    batch_lod = torch.multinomial(self.lod_probs, 1).squeeze(0)
             else:
                 batch_lod = torch.randint(0, self.num_lods, (), device=self.device)
             lods = torch.full((sample_count,), batch_lod, dtype=torch.long, device=self.device)
         elif self.lod_sampling == "fixed0":
             lods = torch.zeros(sample_count, dtype=torch.long, device=self.device)
         elif self.lod_sampling == "exp":
-            lods = torch.multinomial(self.lod_probs, sample_count, replacement=True).to(self.device)
+            lods = torch.multinomial(self.lod_probs, sample_count, replacement=True)
         else:
             lods = torch.randint(0, self.num_lods, (sample_count,), device=self.device)
 
