@@ -37,8 +37,6 @@ def main():
                         help='Number of MLP hidden layers (must match training config)')
     parser.add_argument('--n_frequencies', type=int, default=5,
                         help='Number of frequencies (must match training config)')
-    parser.add_argument('--n_frequencies', type=int, default=5,
-                        help='Number of frequencies (must match training config)')
     parser.add_argument('--tiled', type=str, default='true',
                         choices=['true', 'false'],
                         help='Tiled positional encoding (must match training config)')

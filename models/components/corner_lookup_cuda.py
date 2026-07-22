@@ -34,8 +34,8 @@ __global__ void corner_lookup_forward_kernel(
 
     int fu = (int)floorf(u);
     int fv = (int)floorf(v);
-    int cu = (fu + 1) % R;
-    int cv = (fv + 1) % R;
+    int cu = min(fu + 1, R - 1);
+    int cv = min(fv + 1, R - 1);
 
     int level_stride = R * R * F;
     int out_dim = L * F;
@@ -74,8 +74,8 @@ __global__ void corner_lookup_backward_kernel(
 
     int fu = (int)floorf(u);
     int fv = (int)floorf(v);
-    int cu = (fu + 1) % R;
-    int cv = (fv + 1) % R;
+    int cu = min(fu + 1, R - 1);
+    int cv = min(fv + 1, R - 1);
 
     int level_stride = R * R * F;
     int out_dim = L * F;

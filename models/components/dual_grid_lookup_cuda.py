@@ -63,8 +63,8 @@ __global__ void pe_dual_grid_forward_kernel(
     float vh = v * (float)Rh;
     int fu_h = (int)floorf(uh);
     int fv_h = (int)floorf(vh);
-    int cu_h = (fu_h + 1) % Rh;
-    int cv_h = (fv_h + 1) % Rh;
+    int cu_h = min(fu_h + 1, Rh - 1);
+    int cv_h = min(fv_h + 1, Rh - 1);
 
     int level_stride_h = Rh * Rh * Fh;
 
@@ -89,8 +89,8 @@ __global__ void pe_dual_grid_forward_kernel(
     float vl = v * (float)Rl;
     int fu_l = (int)floorf(ul);
     int fv_l = (int)floorf(vl);
-    int cu_l = (fu_l + 1) % Rl;
-    int cv_l = (fv_l + 1) % Rl;
+    int cu_l = min(fu_l + 1, Rl - 1);
+    int cv_l = min(fv_l + 1, Rl - 1);
     float wu = ul - (float)fu_l;
     float wv = vl - (float)fv_l;
 
@@ -148,8 +148,8 @@ __global__ void pe_dual_grid_backward_kernel(
     float vh = v * (float)Rh;
     int fu_h = (int)floorf(uh);
     int fv_h = (int)floorf(vh);
-    int cu_h = (fu_h + 1) % Rh;
-    int cv_h = (fv_h + 1) % Rh;
+    int cu_h = min(fu_h + 1, Rh - 1);
+    int cv_h = min(fv_h + 1, Rh - 1);
     int level_stride_h = Rh * Rh * Fh;
 
     for (int l = 0; l < Lh; l++) {
@@ -173,8 +173,8 @@ __global__ void pe_dual_grid_backward_kernel(
     float vl = v * (float)Rl;
     int fu_l = (int)floorf(ul);
     int fv_l = (int)floorf(vl);
-    int cu_l = (fu_l + 1) % Rl;
-    int cv_l = (fv_l + 1) % Rl;
+    int cu_l = min(fu_l + 1, Rl - 1);
+    int cv_l = min(fv_l + 1, Rl - 1);
     float wu = ul - (float)fu_l;
     float wv = vl - (float)fv_l;
     int level_stride_l = Rl * Rl * Fl;
