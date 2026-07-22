@@ -29,6 +29,9 @@ def build_model_and_trainer(
     grid_config_path: str | Path,
     data_dir: str | None = None,
     device: torch.device = None,
+    pe_cfg: dict | None = None,
+    mlp_cfg: dict | None = None,
+    grid_sampler_cfg: dict | None = None,
 ) -> tuple:
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     grid_config_path = Path(grid_config_path)
@@ -55,14 +58,17 @@ def build_model_and_trainer(
     dataset.eval()
 
     if model_type == "learnable_grid":
+        pe_cfg = pe_cfg or {"type": "torch_triangle", "n_frequencies": 5, "tiled": True, "tile_size": 8}
+        mlp_cfg = mlp_cfg or {"type": "torch_linear", "hidden_dim": 64, "num_hidden_layers": 2, "output_dim": 8}
+        grid_sampler_cfg = grid_sampler_cfg or {"high_res": "corner_four", "low_res": "bilinear"}
+
         model = LearnableGridNetwork(
             grid_config_path=str(grid_config_path),
             texture_resolution=texture_resolution,
+            pe_cfg=pe_cfg,
+            mlp_cfg=mlp_cfg,
+            grid_sampler_cfg=grid_sampler_cfg,
             output_dim=8,
-            hidden_dim=64,
-            num_hidden_layers=2,
-            n_frequencies=5,
-            use_tiled_encoding=True,
             default_save_bits=48,
             default_quantize_bits=4,
             max_iter=10000,
@@ -86,17 +92,42 @@ def main():
     parser.add_argument("--warmup", type=int, default=10, help="Warmup steps")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--output", default=None, help="Save results to JSON")
+    # Component overrides
+    parser.add_argument("--pe_type", default=None, choices=["torch_triangle", "tcnn_triangle"])
+    parser.add_argument("--mlp_type", default=None, choices=["torch_linear", "tcnn_cutlass"])
+    parser.add_argument("--grid_sampler_type", default=None, choices=["corner_four", "bilinear", "fused_corner_four"])
+    parser.add_argument("--config", default=None, help="YAML config file (for component settings)")
     args = parser.parse_args()
 
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
     print(f"Setting up benchmark...")
+    # Parse component configs
+    pe_cfg = {"type": args.pe_type} if args.pe_type else None
+    mlp_cfg = {"type": args.mlp_type} if args.mlp_type else None
+    grid_sampler_cfg = {"high_res": args.grid_sampler_type, "low_res": "bilinear"} if args.grid_sampler_type else None
+
+    # Override from YAML config if provided
+    if args.config:
+        import yaml
+        with open(args.config) as f:
+            cfg = yaml.safe_load(f)
+        if "pe" in cfg:
+            pe_cfg = cfg["pe"]
+        if "mlp" in cfg:
+            mlp_cfg = cfg["mlp"]
+        if "grid_sampler" in cfg:
+            grid_sampler_cfg = cfg["grid_sampler"]
+
     model, dataset = build_model_and_trainer(
         model_type=args.model,
         texture_resolution=args.texture_resolution,
         grid_config_path=args.grid_config,
         data_dir=args.data_dir,
         device=device,
+        pe_cfg=pe_cfg,
+        mlp_cfg=mlp_cfg,
+        grid_sampler_cfg=grid_sampler_cfg,
     )
 
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -153,6 +184,9 @@ def main():
     if args.output:
         summary = {
             "model": args.model,
+            "pe_type": pe_cfg.get("type", "torch_triangle") if pe_cfg else "torch_triangle",
+            "mlp_type": mlp_cfg.get("type", "torch_linear") if mlp_cfg else "torch_linear",
+            "sampler_type": grid_sampler_cfg.get("high_res", "corner_four") if grid_sampler_cfg else "corner_four",
             "params": total_params,
             "resolution": f"{dataset.texture_width}x{dataset.texture_height}",
             "batch_size": args.batch_size,
