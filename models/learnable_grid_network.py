@@ -132,12 +132,21 @@ class LearnableGridNetwork(NTCModel):
                 self.level_mip_ranges.append([mip_lo, mip_hi])
                 self.num_mip_levels = max(self.num_mip_levels, mip_hi)
                 level_configs = []
+                # Per-feature-grid defaults (shared by all resolutions in this level)
+                fg_channels = fg_cfg.get("channels", None)
+                fg_save_bits = fg_cfg.get("save_bits", default_save_bits)
+                fg_quantize_bits = fg_cfg.get("quantize_bits", default_quantize_bits)
                 for res in fg_cfg["resolutions"]:
-                    level_configs.append({
-                        "resolution": res,
-                        "save_bits": fg_cfg.get("save_bits", default_save_bits),
-                        "quantize_bits": fg_cfg.get("quantize_bits", default_quantize_bits),
-                    })
+                    cfg = {"resolution": res}
+                    # If 'channels' provided directly, use it; otherwise derive from save/quantize bits
+                    if fg_channels is not None:
+                        cfg["channels"] = fg_channels
+                        cfg["save_bits"] = fg_channels * fg_quantize_bits
+                        cfg["quantize_bits"] = fg_quantize_bits
+                    else:
+                        cfg["save_bits"] = fg_save_bits
+                        cfg["quantize_bits"] = fg_quantize_bits
+                    level_configs.append(cfg)
                 parsed[fg_idx] = level_configs
             grid_configs = parsed
         else:
@@ -220,7 +229,7 @@ class LearnableGridNetwork(NTCModel):
                 resolution = int(grid_cfg["resolution"])
                 save_bits = int(grid_cfg["save_bits"])
                 quantize_bits = int(grid_cfg["quantize_bits"])
-                feature_dim = save_bits // quantize_bits
+                feature_dim = grid_cfg.get("channels", save_bits // quantize_bits)
 
                 is_high_res = self._is_high_res_grid(level, i)
                 if is_dual:
@@ -317,6 +326,9 @@ class LearnableGridNetwork(NTCModel):
                 resolution = int(grid_cfg["resolution"])
                 save_bits = int(grid_cfg.get("save_bits", default_save_bits))
                 quantize_bits = int(grid_cfg.get("quantize_bits", default_quantize_bits))
+                channels = grid_cfg.get("channels", None)
+                if channels is not None:
+                    save_bits = channels * quantize_bits
                 if resolution <= 0:
                     raise ValueError(f"resolution must be positive, got {resolution}")
                 if save_bits <= 0:
@@ -325,11 +337,14 @@ class LearnableGridNetwork(NTCModel):
                     raise ValueError(f"quantize_bits must be positive, got {quantize_bits}")
                 if save_bits % quantize_bits != 0:
                     raise ValueError(f"save_bits must be divisible by quantize_bits")
-                normalized[level].append({
+                entry = {
                     "resolution": resolution,
                     "save_bits": save_bits,
                     "quantize_bits": quantize_bits,
-                })
+                }
+                if channels is not None:
+                    entry["channels"] = channels
+                normalized[level].append(entry)
         return normalized
 
     def _is_high_res_grid(self, level: int, grid_index: int) -> bool:
