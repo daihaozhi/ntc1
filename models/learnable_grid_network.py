@@ -214,6 +214,7 @@ class LearnableGridNetwork(NTCModel):
             level_quantize_bits = nn.ParameterList()
             level_feature_dims = nn.ParameterList()
             level_dim = 0
+            is_dual = isinstance(self.high_res_sampler, DualGridSampler)
 
             for i, grid_cfg in enumerate(grid_cfg_list):
                 resolution = int(grid_cfg["resolution"])
@@ -222,11 +223,15 @@ class LearnableGridNetwork(NTCModel):
                 feature_dim = save_bits // quantize_bits
 
                 is_high_res = self._is_high_res_grid(level, i)
-                mult = (
-                    self.high_res_sampler.output_multiplier
-                    if is_high_res
-                    else self.low_res_sampler.output_multiplier
-                )
+                if is_dual:
+                    # DualGridSampler produces full concatenated output
+                    mult = 4 if is_high_res else 1
+                else:
+                    mult = (
+                        self.high_res_sampler.output_multiplier
+                        if is_high_res
+                        else self.low_res_sampler.output_multiplier
+                    )
                 total_feature_dim = feature_dim * mult
                 level_dim += total_feature_dim
 
