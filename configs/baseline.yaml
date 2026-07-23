@@ -1,0 +1,41 @@
+# Single baseline: 8 random 128x128 crops = 131072 samples/step.
+model: learnable_grid
+texture_resolution: 1024
+grid_config: configs/grid/grid_1024.json
+diffuse_color_space: srgb
+
+pe:
+  type: tcnn_triangle
+  n_frequencies: 5
+  tiled: true
+  tile_size: 8
+
+mlp:
+  type: tcnn_cutlass
+  hidden_dim: 64
+  num_hidden_layers: 2
+  output_dim: 9
+output_activation: none
+loss_mode: mse
+
+grid_sampler:
+  high_res: corner_four
+  low_res: bilinear
+
+quantize: true
+default_save_bits: 48
+default_quantize_bits: 4
+batch_size: 131072
+crop_size: 128
+crops_per_batch: 8
+max_iter: 100000
+train_steps: 10000
+scheduler_t_max: 100000
+quantized_finetune_steps: 0
+lr: 0.005
+network_lr: 0.0025
+lod_sampling: exp
+mip_target_mode: discrete
+eval_interval: 1000
+save_interval: 5000
+device: cuda

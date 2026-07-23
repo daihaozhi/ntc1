@@ -23,6 +23,9 @@ def main():
     parser = argparse.ArgumentParser(description='Reconstruct textures from trained model')
     parser.add_argument('--data_dir', type=str, required=True,
                         help='Directory containing original texture images')
+    parser.add_argument('--diffuse_color_space', type=str, default='srgb',
+                        choices=['linear', 'srgb'],
+                        help='Diffuse domain used during training')
     parser.add_argument('--checkpoint', type=str, required=True,
                         help='Path to trained model checkpoint (.pth)')
     parser.add_argument('--output_dir', type=str, default='./reconstructed',
@@ -42,6 +45,12 @@ def main():
                         help='Tiled positional encoding (must match training config)')
     parser.add_argument('--batch_size', type=int, default=65536,
                         help='Batch size for reconstruction')
+    parser.add_argument('--pe_type', type=str, default='torch_triangle',
+                        choices=['torch_triangle', 'tcnn_triangle'],
+                        help='Positional encoding type (must match training config)')
+    parser.add_argument('--output_activation', type=str, default='none',
+                        choices=['none', 'hard_swish', 'hard_gelu', 'leaky_relu'],
+                        help='Output activation (must match training config)')
     parser.add_argument('--mlp_type', type=str, default='torch_linear',
                         choices=['torch_linear', 'tcnn_cutlass'],
                         help='MLP type (must match training config)')
@@ -57,7 +66,11 @@ def main():
     grid_config_path = args.grid_config or str(_Path(__file__).resolve().parents[1] / 'configs' / 'grid' / f'grid_{args.texture_resolution}.json')
 
     # ── Load original textures as reference ──────────────────────────
-    dataset = TextureDataset(data_dir=args.data_dir, device=device)
+    dataset = TextureDataset(
+        data_dir=args.data_dir,
+        device=device,
+        diffuse_color_space=args.diffuse_color_space,
+    )
     dataset.eval()
     H, W, loaded_C = dataset.textures.shape
     print(f'Original texture: {W}x{H}, loaded_channels={loaded_C}')
@@ -65,16 +78,18 @@ def main():
     # Reference in canonical 11-channel layout [H, W, 11]
     pixels_flat = dataset.textures.reshape(-1, loaded_C)  # [H*W, C]
     ref_canonical = dataset.expand_to_canonical(pixels_flat).reshape(H, W, CANONICAL_NUM_CHANNELS)
-    ref_material = ref_canonical[:, :, [0, 1, 2, 8, 3, 4, 5, 6]]
+    ref_material = ref_canonical[:, :, dataset.model_channel_indices]
 
     # ── Load model ───────────────────────────────────────────────────
+    output_dim = dataset.model_output_dim
     model = LearnableGridNetwork(
         grid_config_path=grid_config_path,
         texture_resolution=args.texture_resolution,
-        pe_cfg={"type": "torch_triangle", "n_frequencies": args.n_frequencies, "tiled": args.tiled == 'true', "tile_size": 8},
-        mlp_cfg={"type": args.mlp_type, "hidden_dim": args.hidden_dim, "num_hidden_layers": args.num_hidden_layers, "output_dim": 8},
+        pe_cfg={"type": args.pe_type, "n_frequencies": args.n_frequencies, "tiled": args.tiled == 'true', "tile_size": 8},
+        mlp_cfg={"type": args.mlp_type, "hidden_dim": args.hidden_dim, "num_hidden_layers": args.num_hidden_layers, "output_dim": output_dim},
         grid_sampler_cfg={"high_res": args.grid_sampler_type, "low_res": "bilinear"},
-        output_dim=8,
+        output_dim=output_dim,
+        output_activation=args.output_activation,
         default_save_bits=48,
         default_quantize_bits=4,
     ).to(device)
@@ -90,20 +105,21 @@ def main():
     xs = torch.arange(W, device=device).view(1, -1).expand(H, W).reshape(-1)
     num_pixels = H * W
 
-    pred_material = torch.zeros((num_pixels, 8), device=device)
+    pred_material = torch.zeros((num_pixels, output_dim), device=device)
 
     for start in range(0, num_pixels, args.batch_size):
         end = min(start + args.batch_size, num_pixels)
         idx = slice(start, end)
         b = end - start
 
-        u = xs[idx].float() / W
-        v = ys[idx].float() / H
+        # Sample at texel centers, matching training and evaluator.py.
+        u = (xs[idx].float() + 0.5) / W
+        v = (ys[idx].float() + 0.5) / H
 
         model_input = torch.stack([u, v, torch.zeros(b, device=device)], dim=1)
         pred_material[idx] = model(model_input)
 
-    pred_material = pred_material.reshape(H, W, 8).cpu()
+    pred_material = pred_material.reshape(H, W, output_dim).cpu()
     ref_material = ref_material.cpu()
 
     # ── Save each texture type ───────────────────────────────────────
@@ -117,26 +133,21 @@ def main():
     pred_material = torch.nan_to_num(pred_material, nan=0.0, posinf=1.0, neginf=0.0)
 
     print('\n--- Reconstruction Results ---')
-    output_slices = {
-        'diffuse': (0, 3),
-        'metallic': (3, 4),
-        'normal': (4, 7),
-        'roughness': (7, 8),
-    }
-    for tex_type, (cn_start, cn_end) in output_slices.items():
-        if tex_type not in dataset.available_textures and tex_type != 'metallic':
-            continue
+    for tex_type, (cn_start, cn_end) in dataset.model_texture_slices.items():
         n_ch = cn_end - cn_start
 
         pred_tex = pred_material[:, :, cn_start:cn_end]
         ref_tex = ref_material[:, :, cn_start:cn_end]
 
-        if tex_type in srgb_types:
+        # Only linear-domain diffuse predictions need transfer to sRGB.
+        # In the direct-sRGB training mode, save values unchanged; applying
+        # another gamma curve is what makes the reconstruction look washed out.
+        if tex_type in srgb_types and args.diffuse_color_space == 'linear':
             save_tex = pred_tex.clamp(0.0, 1.0).pow(1.0 / 2.2)
         else:
             save_tex = pred_tex.clamp(0.0, 1.0)
 
-        save_np = (save_tex.numpy() * 255).round().clip(0, 255).astype(np.uint8)
+        save_np = (save_tex.detach().numpy() * 255).round().clip(0, 255).astype(np.uint8)
 
         if n_ch == 1:
             img = Image.fromarray(save_np.squeeze(-1), mode='L')
@@ -147,8 +158,9 @@ def main():
         img.save(save_path)
         print(f'  Saved: {save_path}')
 
-        # PSNR
-        mse = ((pred_tex - ref_tex) ** 2).mean().item()
+        # PSNR is measured on the same clamped domain as the saved image.
+        metric_pred = pred_tex.clamp(0.0, 1.0)
+        mse = ((metric_pred - ref_tex) ** 2).mean().item()
         psnr = 10 * math.log10(1.0 / mse) if mse > 1e-10 else float('inf')
         print(f'    {tex_type}: MSE={mse:.6f}, PSNR={psnr:.2f} dB')
 

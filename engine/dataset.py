@@ -47,11 +47,15 @@ CANONICAL_NUM_CHANNELS = 11
 
 class TextureDataset(torch.nn.Module):
 
-    def __init__(self, data_dir: str, device: torch.device):
+    def __init__(self, data_dir: str, device: torch.device, diffuse_color_space: str = "linear"):
         super().__init__()
+
+        if diffuse_color_space not in {"linear", "srgb"}:
+            raise ValueError("diffuse_color_space must be 'linear' or 'srgb'")
 
         self.device = device
         self.data_dir = data_dir
+        self.diffuse_color_space = diffuse_color_space
 
         self.keyword_order, self.texture_keywords, self.texture_configs = get_texture_config()
         self.channel_slices = {}
@@ -61,6 +65,32 @@ class TextureDataset(torch.nn.Module):
         self.texture_height, self.texture_width, self.num_channels = self.textures.shape
 
         self.num_lods = int(min(math.log2(self.texture_height), math.log2(self.texture_width))) + 1
+
+        # The model output is built from the maps actually present in the
+        # dataset. Keep the historical material order, then append data maps.
+        # For the current data this becomes diffuse(3)+normal(3)+roughness+
+        # occlusion+displacement = 9 channels.
+        self.model_texture_order = [
+            "diffuse", "metallic", "normal", "roughness",
+            "occlusion", "displacement", "specular",
+        ]
+        self.model_channel_indices = []
+        self.model_channel_names = []
+        self.model_channel_types = []
+        self.model_texture_slices = {}
+        for tex_type in self.model_texture_order:
+            if tex_type not in self.available_textures:
+                continue
+            cn_start, cn_end = CANONICAL_CHANNEL_SLICES[tex_type]
+            out_start = len(self.model_channel_indices)
+            self.model_channel_indices.extend(range(cn_start, cn_end))
+            self.model_texture_slices[tex_type] = (out_start, len(self.model_channel_indices))
+            for channel in range(cn_start, cn_end):
+                suffix = "rgb"[channel - cn_start] if cn_end - cn_start == 3 else "value"
+                self.model_channel_names.append(f"{tex_type}.{suffix}")
+                self.model_channel_types.append(tex_type)
+
+        self.model_output_dim = len(self.model_channel_indices)
         self.lod_cache = self._generate_lod()
 
     @torch.no_grad()
@@ -117,7 +147,10 @@ class TextureDataset(torch.nn.Module):
             lod_w = max(self.texture_width >> lod_int, 1)
             mip = self.lod_cache[lod_int, :lod_h, :lod_w, :]
 
-            p = uv[mask] * torch.tensor([lod_w, lod_h], device=self.device, dtype=uv.dtype)
+            # uv denotes normalized texture coordinates at texel centers.
+            # Convert to texel-space so a center sample maps to the texel
+            # itself (the usual half-texel convention).
+            p = uv[mask] * torch.tensor([lod_w, lod_h], device=self.device, dtype=uv.dtype) - 0.5
             p0 = torch.floor(p).to(torch.long)
             f = p - p0.float()
 
@@ -160,7 +193,11 @@ class TextureDataset(torch.nn.Module):
                 image = image.convert(color_mode)
                 tensor = TF.to_tensor(image)
 
-                if texture_type != "normal":
+                # Diffuse is the only color texture here.  Data textures
+                # (normal, roughness, AO, displacement) must retain their
+                # stored numeric values; applying gamma to them changes the
+                # material parameter itself.
+                if texture_type == "diffuse" and self.diffuse_color_space == "linear":
                     tensor = torch.pow(tensor, 2.2)
 
                 if tensor.shape[0] != expected_channels:

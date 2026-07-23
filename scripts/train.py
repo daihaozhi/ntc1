@@ -59,6 +59,9 @@ def main():
                         help="Model architecture")
     parser.add_argument("--data_dir", type=str, default=None,
                         help="Directory containing texture images")
+    parser.add_argument("--diffuse_color_space", type=str, default=None,
+                        choices=["linear", "srgb"],
+                        help="Training domain for diffuse maps (srgb avoids gamma on export)")
     parser.add_argument("--output_dir", type=str, default="./output",
                         help="Output directory for checkpoints")
     parser.add_argument("--texture_resolution", type=int, default=4096)
@@ -68,6 +71,8 @@ def main():
     parser.add_argument("--crop_size", type=int, default=256)
     parser.add_argument("--crops_per_batch", type=int, default=8)
     parser.add_argument("--max_iter", type=int, default=40000)
+    parser.add_argument("--scheduler_t_max", type=int, default=None,
+                        help="Cosine scheduler period in steps; defaults to max_iter")
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--network_lr", type=float, default=0.005)
     parser.add_argument("--hidden_dim", type=int, default=64)
@@ -114,13 +119,19 @@ def main():
     device = torch.device(_get("device", "cuda") if torch.cuda.is_available() else "cpu")
 
     # ── Dataset ──────────────────────────────────────────────────────
-    dataset = TextureDataset(data_dir=data_dir, device=device)
+    dataset = TextureDataset(
+        data_dir=data_dir,
+        device=device,
+        diffuse_color_space=_get("diffuse_color_space", "linear"),
+    )
     dataset.eval()
     print(f"Dataset: {dataset.texture_width}x{dataset.texture_height}, "
           f"channels={dataset.num_channels}, LODs={dataset.num_lods}")
+    print(f"Model outputs ({dataset.model_output_dim}): {', '.join(dataset.model_channel_names)}")
 
     # ── Model ────────────────────────────────────────────────────────
     if model_type == "learnable_grid":
+        output_dim = dataset.model_output_dim
         pe_cfg = cfg.get("pe", {})
         mlp_cfg = cfg.get("mlp", {})
         grid_sampler_cfg = cfg.get("grid_sampler", {})
@@ -137,8 +148,11 @@ def main():
                 "type": "torch_linear",
                 "hidden_dim": int(_get("hidden_dim", 64)),
                 "num_hidden_layers": int(_get("num_hidden_layers", 2)),
-                "output_dim": 8,
+                "output_dim": output_dim,
             }
+        else:
+            mlp_cfg = dict(mlp_cfg)
+            mlp_cfg["output_dim"] = output_dim
         if not grid_sampler_cfg:
             grid_sampler_cfg = {"high_res": "corner_four", "low_res": "bilinear"}
 
@@ -148,10 +162,11 @@ def main():
             pe_cfg=pe_cfg,
             mlp_cfg=mlp_cfg,
             grid_sampler_cfg=grid_sampler_cfg,
-            output_dim=8,
+            output_dim=output_dim,
             default_save_bits=48 if texture_resolution == 4096 else 192,
             default_quantize_bits=4 if texture_resolution == 4096 else 16,
             max_iter=int(_get("max_iter", 40000)),
+            output_activation=cfg.get("output_activation", "none"),
         ).to(device)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
@@ -167,6 +182,11 @@ def main():
         lr=float(_get("lr", 0.01)),
         network_lr=float(_get("network_lr", 0.005)),
         max_iter=int(_get("max_iter", 40000)),
+        train_steps=int(_get("train_steps", _get("max_iter", 40000))),
+        scheduler_t_max=(_get("scheduler_t_max", None)),
+        quantized_finetune_steps=(_get("quantized_finetune_steps", None)),
+        loss_mode=_get("loss_mode", "mse"),
+        texture_loss_weights=cfg.get("texture_loss_weights"),
         batch_size=int(_get("batch_size", 65536)),
         crop_size=int(_get("crop_size", 256)),
         crops_per_batch=int(_get("crops_per_batch", 8)),

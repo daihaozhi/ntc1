@@ -18,6 +18,7 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 try:
     import tinycudann as tcnn
@@ -72,8 +73,16 @@ class LearnableGridNetwork(NTCModel):
         use_tiled_encoding: bool = False,
         tile_size: int = 8,
         n_frequencies: int = 5,
+        output_activation: str = "none",
     ):
         super().__init__()
+
+        self.output_activation = str(output_activation).strip().lower().replace("-", "_")
+        if self.output_activation not in {"none", "hard_swish", "hard_gelu", "leaky_relu"}:
+            raise ValueError(
+                f"Unsupported output_activation: {output_activation}. "
+                "Expected none, hard_swish, hard_gelu, or leaky_relu."
+            )
 
         # ── Component configs: new dict API takes precedence over flat params ──
         if pe_cfg is None:
@@ -485,6 +494,15 @@ class LearnableGridNetwork(NTCModel):
         idx = torch.bucketize(mip, boundaries) - 1
         return idx.clamp(min=0, max=len(self.grid_configs) - 1)
 
+    def _apply_output_activation(self, x: torch.Tensor) -> torch.Tensor:
+        if self.output_activation == "none":
+            return x
+        if self.output_activation == "hard_swish":
+            return x * torch.clamp(x + 3.0, min=0.0, max=6.0) / 6.0
+        if self.output_activation == "hard_gelu":
+            return x * torch.clamp((x + 1.5) / 3.0, min=0.0, max=1.0)
+        return F.leaky_relu(x, negative_slope=0.01)
+
     # ═══════════════════════════════════════════════════════════════════
     # Forward
     # ═══════════════════════════════════════════════════════════════════
@@ -535,7 +553,7 @@ class LearnableGridNetwork(NTCModel):
         else:
             combined = torch.cat([pos_encoding, features, lod], dim=1)
 
-        return self.mlp(combined)
+        return self._apply_output_activation(self.mlp(combined))
 
     # ═══════════════════════════════════════════════════════════════════
     # Wrap boundary constraint

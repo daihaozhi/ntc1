@@ -18,6 +18,16 @@ from engine.dataset import TextureDataset
 from models.base import NTCModel
 
 
+def normal_angular_loss(pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """FNTC-style angular loss for XYZ normal maps encoded in [0, 1]."""
+    pred_n = pred * 2.0 - 1.0
+    target_n = target * 2.0 - 1.0
+    pred_n = pred_n / torch.sqrt(torch.clamp((pred_n ** 2).sum(dim=1, keepdim=True), min=eps))
+    target_n = target_n / torch.sqrt(torch.clamp((target_n ** 2).sum(dim=1, keepdim=True), min=eps))
+    dot = (pred_n * target_n).sum(dim=1).clamp(-1.0, 1.0)
+    return (1.0 - dot).mean()
+
+
 class Trainer:
     """Model-agnostic training loop for NTC.
 
@@ -36,6 +46,11 @@ class Trainer:
         lr: float = 0.01,
         network_lr: float = 0.005,
         max_iter: int = 40000,
+        train_steps: int | None = None,
+        scheduler_t_max: int | None = None,
+        quantized_finetune_steps: int | None = None,
+        loss_mode: str = "mse",
+        texture_loss_weights: dict[str, float] | None = None,
         use_cuda_graph: bool = False,
         graph_pool_steps: int = 50,
         # Data
@@ -63,6 +78,21 @@ class Trainer:
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.max_iter = max_iter
+        self.train_steps = int(train_steps if train_steps is not None else max_iter)
+        if self.train_steps < 1 or self.train_steps > self.max_iter:
+            raise ValueError("train_steps must be in [1, max_iter]")
+        self.scheduler_t_max = int(scheduler_t_max or max_iter)
+        self.quantized_finetune_steps = (
+            max_iter // 20 if quantized_finetune_steps is None
+            else max(0, int(quantized_finetune_steps))
+        )
+        self.loss_mode = str(loss_mode).strip().lower().replace("-", "_")
+        if self.loss_mode in {"plain", "plain_mse", "mse_only"}:
+            self.loss_mode = "mse"
+        elif self.loss_mode in {"fntc_grouped", "fntc_normal", "grouped"}:
+            self.loss_mode = "fntc"
+        if self.loss_mode not in {"mse", "fntc"}:
+            raise ValueError("loss_mode must be 'mse' or 'fntc'")
         self.batch_size = batch_size
         self.crop_size = crop_size
         self.crops_per_batch = crops_per_batch
@@ -80,18 +110,39 @@ class Trainer:
         self.H = dataset.texture_height
         self.W = dataset.texture_width
         self.num_lods = dataset.num_lods
+        self.output_dim = dataset.model_output_dim
 
         # Build optimizer
         self._build_optimizer(lr, network_lr)
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer, T_max=max_iter, eta_min=0.0,
+            self.optimizer, T_max=self.scheduler_t_max, eta_min=0.0,
         )
 
-        # Loss weights: basecolor(3) + metalness(1) + normal(3) + roughness(1) = 8
+        # Keep both historical plain-MSE weights and FNTC grouped weights.
+        # Neither mode changes the model or compression budget.
+        if self.loss_mode == "mse":
+            default_weights = {
+                "diffuse": 1.0, "metallic": 0.5, "normal": 1.0,
+                "roughness": 0.5, "occlusion": 0.5,
+                "displacement": 0.5, "specular": 0.5,
+            }
+        else:
+            default_weights = {
+                "diffuse": 1.0, "normal": 0.3, "roughness": 0.2,
+                "occlusion": 0.2, "metallic": 0.2,
+                "specular": 0.2, "displacement": 0.2,
+            }
+        self.texture_loss_weights = dict(default_weights)
+        if texture_loss_weights:
+            self.texture_loss_weights.update(
+                {str(k): float(v) for k, v in texture_loss_weights.items()}
+            )
         self.loss_weights = torch.tensor(
-            [1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 0.5],
+            [self.texture_loss_weights[name]
+             for name in dataset.model_channel_types],
             device=self.device,
         )
+        print(f"Loss: {self.loss_mode} ({self.texture_loss_weights})")
 
         # LoD sampling probabilities
         lod_probs = torch.exp(-torch.arange(self.num_lods, dtype=torch.float32, device=self.device) * 1.0)
@@ -110,7 +161,7 @@ class Trainer:
             dummy = torch.randn(N, 3, device=self.device)
             for _ in range(3):
                 _ = self.model(dummy)
-                _ = ((_ - torch.randn(N, 8, device=self.device)) ** 2).mean()
+                _ = ((_ - torch.randn(N, self.output_dim, device=self.device)) ** 2).mean()
             torch.cuda.synchronize()
             print('[torch.compile] Compile warmup complete.')
 
@@ -136,7 +187,7 @@ class Trainer:
         """Sample pixel coordinates and LOD values.
 
         Returns (u, v, ys, xs, lods, lod_values):
-            u, v:  normalized [0,1) coordinates
+            u, v: normalized pixel-center coordinates [(0.5/W), (W-0.5)/W]
             ys, xs: integer pixel indices
             lods:    integer LOD levels
             lod_values: continuous LOD values for model input
@@ -182,8 +233,9 @@ class Trainer:
         else:
             lods = torch.randint(0, self.num_lods, (sample_count,), device=self.device)
 
-        u = xs.float() / self.W
-        v = ys.float() / self.H
+        # Use texel centers consistently for both training and evaluation.
+        u = (xs.float() + 0.5) / self.W
+        v = (ys.float() + 0.5) / self.H
 
         if self.mip_target_mode == "trilinear" and self.lod_sampling != "fixed0":
             lod_values = torch.clamp(lods.float() + torch.rand(sample_count, device=self.device), max=float(self.num_lods - 1))
@@ -201,8 +253,8 @@ class Trainer:
                 batch_index = torch.stack([ys, xs, lods], dim=1)
                 gt_data = self.dataset.sample_discrete_lod(batch_index)
             canonical_gt = self.dataset.expand_to_canonical(gt_data)
-            # Select 8 output channels: basecolor.rgb, metallic, normal.rgb, roughness
-            return canonical_gt[:, [0, 1, 2, 8, 3, 4, 5, 6]]
+            # Select the output channels represented by this dataset.
+            return canonical_gt[:, self.dataset.model_channel_indices]
 
     # ── Training step ─────────────────────────────────────────────────
 
@@ -212,6 +264,45 @@ class Trainer:
             crop_size = min(self.crop_size, self.H, self.W)
             return crop_size * crop_size * self.crops_per_batch
         return self.batch_size
+
+    def _compute_mse_loss(self, pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
+        """Historical NTC loss: weighted per-channel mean squared error."""
+        return ((pred.float() - gt.float()).pow(2) * self.loss_weights).mean()
+
+    def _compute_fntc_loss(self, pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
+        """FNTC loss: diffuse/ROMD MSE and angular XYZ normal loss."""
+        groups = {
+            "diffuse": ["diffuse"],
+            "normal": ["normal"],
+            "romd": ["roughness", "occlusion", "metallic", "specular", "displacement"],
+        }
+        total = pred.new_zeros(())
+        for group_name, texture_names in groups.items():
+            indices = []
+            for tex_type in texture_names:
+                if tex_type in self.dataset.model_texture_slices:
+                    start, end = self.dataset.model_texture_slices[tex_type]
+                    indices.extend(range(start, end))
+            if not indices:
+                continue
+
+            idx = torch.tensor(indices, device=pred.device, dtype=torch.long)
+            group_pred = pred.index_select(1, idx).float()
+            group_gt = gt.index_select(1, idx).float()
+            weights = self.loss_weights.index_select(0, idx).float()
+
+            if group_name == "normal":
+                # For XYZ normals, compare directions instead of RGB values.
+                total = total + normal_angular_loss(group_pred, group_gt) * weights.sum()
+            else:
+                channel_mse = (group_pred - group_gt).pow(2).mean(dim=0)
+                total = total + (channel_mse * weights).sum()
+        return total
+
+    def _compute_reconstruction_loss(self, pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
+        if self.loss_mode == "mse":
+            return self._compute_mse_loss(pred, gt)
+        return self._compute_fntc_loss(pred, gt)
 
     def train_step(self) -> dict[str, float]:
         """Single training step. Returns dict of metrics."""
@@ -227,7 +318,7 @@ class Trainer:
         model_input = torch.stack([u, v, lod_norm], dim=1)
 
         pred = self.model(model_input)
-        reconstruction_loss = ((pred - gt) ** 2 * self.loss_weights).mean()
+        reconstruction_loss = self._compute_reconstruction_loss(pred, gt)
 
         self.optimizer.zero_grad()
         reconstruction_loss.backward()
@@ -256,25 +347,23 @@ class Trainer:
         ys_all = torch.arange(self.H, device=self.device).view(-1, 1).expand(self.H, self.W).reshape(-1)
         xs_all = torch.arange(self.W, device=self.device).view(1, -1).expand(self.H, self.W).reshape(-1)
         num_pixels = self.H * self.W
-        pred_all = torch.zeros((num_pixels, 8), device=self.device)
+        pred_all = torch.zeros((num_pixels, self.output_dim), device=self.device)
 
         for s in range(0, num_pixels, self.batch_size):
             e = min(s + self.batch_size, num_pixels)
-            u_b = xs_all[s:e].float() / self.W
-            v_b = ys_all[s:e].float() / self.H
+            u_b = (xs_all[s:e].float() + 0.5) / self.W
+            v_b = (ys_all[s:e].float() + 0.5) / self.H
             inp = torch.stack([u_b, v_b, torch.zeros(e - s, device=self.device)], dim=1)
             pred_all[s:e] = self.model(inp)
 
-        pred_all = pred_all.reshape(self.H, self.W, 8).cpu()
+        # Match the stored/reconstructed texture domain used for PSNR.
+        pred_all = pred_all.reshape(self.H, self.W, self.output_dim).cpu().clamp(0.0, 1.0)
         pixels_flat = self.dataset.textures.reshape(-1, self.dataset.num_channels)
         canonical_ref = self.dataset.expand_to_canonical(pixels_flat).reshape(self.H, self.W, 11)
-        ref = canonical_ref[:, :, [0, 1, 2, 8, 3, 4, 5, 6]].cpu()
+        ref = canonical_ref[:, :, self.dataset.model_channel_indices].cpu()
 
         channel_mse = ((pred_all - ref) ** 2).mean(dim=(0, 1))
-        channel_names = [
-            "basecolor.r", "basecolor.g", "basecolor.b", "metallic",
-            "normal.r", "normal.g", "normal.b", "roughness",
-        ]
+        channel_names = self.dataset.model_channel_names
         channel_psnr = {
             name: 10 * math.log10(1.0 / float(mse)) if float(mse) > 1e-10 else float("inf")
             for name, mse in zip(channel_names, channel_mse)
@@ -305,13 +394,13 @@ class Trainer:
 
         t_start = time.perf_counter()
 
-        for step in range(self.max_iter):
+        for step in range(self.train_steps):
             metrics = self.train_step()
 
             # Logging
             if step % 10000 == 0 or step <= 1:
                 print(
-                    f"[{step:5d}/{self.max_iter}]  "
+                    f"[{step:5d}/{self.train_steps}]  "
                     f"loss={metrics['loss']:.6f}  lr={metrics['lr']:.2e}",
                     flush=True,
                 )
@@ -335,7 +424,8 @@ class Trainer:
                 self.save_checkpoint(f"model_{step}.pth")
                 print(f"  -> Saved checkpoint: model_{step}.pth")
 
-        # Final: quantize and fine-tune MLP
+        # Optional final quantization/fine-tuning. A short baseline can
+        # disable this so the requested train_steps is exact.
         self._finetune_quantized()
 
         t_end = time.perf_counter()
@@ -348,6 +438,8 @@ class Trainer:
             "model_type": self.model.model_type,
             "resolution": f"{self.W}x{self.H}",
             "max_iter": self.max_iter,
+            "train_steps": self.train_steps,
+            "loss_mode": self.loss_mode,
             "best_psnr": self.best_psnr,
             "total_time_min": total_time / 60,
             "avg_step_ms": sum(self._step_times) / len(self._step_times) * 1000 if self._step_times else 0,
@@ -359,8 +451,8 @@ class Trainer:
 
     def _finetune_quantized(self) -> None:
         """Quantize grid and fine-tune MLP for the final 5% of steps."""
-        if hasattr(self.model, "quantize_grids_and_freeze"):
-            finetune_steps = max(1, self.max_iter // 20)
+        if hasattr(self.model, "quantize_grids_and_freeze") and self.quantized_finetune_steps > 0:
+            finetune_steps = self.quantized_finetune_steps
             self.model.quantize_grids_and_freeze()
             self.model.train()
             for _ in range(finetune_steps):
@@ -370,7 +462,7 @@ class Trainer:
                 lod_norm = lod_values / (self.num_lods - 1)
                 model_input = torch.stack([u, v, lod_norm], dim=1)
                 pred = self.model(model_input)
-                loss = ((pred - gt) ** 2 * self.loss_weights).mean()
+                loss = self._compute_reconstruction_loss(pred, gt)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
