@@ -1,0 +1,48 @@
+# Build products and local tooling
+/build*/
+/.codex-bin/
+/.codex-manual-cache/
+/artifacts/
+/captures/
+/shader_cache/
+/optimize-logs/
+/imgui.ini
+*.log
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+*.spv
+*.dxil
+*.cso
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Local research and coordination files
+/5
+/agent-skill-brief.md
+/coordinator.js
+/ntc_paper.pdf
+/ntc_paper.txt
+/table3_page9.png
+/VP_VULKANINFO_*.json
+
+# Scene assets, training outputs, and downloaded third-party trees are local.
+# Keep only source dependencies required to build the renderer.
+/external/*
+!/external/imgui/
+!/external/imgui/**
+!/external/MiniDXNN/
+!/external/MiniDXNN/**
+!/external/AgilitySDK/
+!/external/AgilitySDK/**
+!/external/DXC/
+!/external/DXC/**
+
+# Locally bundled texture encoders
+/tools/astcenc/
+/tools/astcenc.zip

@@ -1,0 +1,3 @@
+[submodule "external/MiniDXNN"]
+	path = external/MiniDXNN
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/MiniDXNN.git

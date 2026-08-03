@@ -1,0 +1,2472 @@
+{
+  "methodology": {
+    "materials": [
+      "material_00",
+      "material_01",
+      "material_03",
+      "material_04",
+      "material_05",
+      "material_06",
+      "material_07",
+      "material_08",
+      "material_09",
+      "material_10",
+      "material_11",
+      "material_12",
+      "material_13",
+      "material_14",
+      "material_15",
+      "material_16",
+      "material_17",
+      "material_18",
+      "material_19",
+      "material_20",
+      "material_21",
+      "material_22",
+      "material_23",
+      "material_24"
+    ],
+    "reference_resolution": [
+      1024,
+      1024
+    ],
+    "ntc_coordinate_mode": "centers",
+    "aggregate": "Arithmetic mean over material-level metrics; 8 channels weighted equally.",
+    "bc_sampling": "348x348 decoded BC textures sampled to 1024x1024 with bilinear wrap.",
+    "lpips": "LPIPS v0.1, AlexNet/ImageNet trunk, diffuse RGB in sRGB space mapped to [-1,1]; arithmetic mean over 24 materials. Lower is better."
+  },
+  "summary": {
+    "ntc": {
+      "material_count": 24,
+      "eight_channel_mean_psnr_db": 44.88107805619931,
+      "eight_channel_std_psnr_db": 2.9472905936850764,
+      "eight_channel_global_psnr_db": 43.768573683369866,
+      "eight_channel_mean_ssim": 0.9947209054074729,
+      "eight_channel_std_ssim": 0.0011893580146989644,
+      "textures": {
+        "diffuse": {
+          "mean_psnr_db": 44.81013005916483,
+          "std_psnr_db": 3.0148541005139187,
+          "global_psnr_db": 43.79131585785196,
+          "mean_ssim": 0.9937653722966173,
+          "std_ssim": 0.002309019931656761
+        },
+        "normal": {
+          "mean_psnr_db": 45.980373563463125,
+          "std_psnr_db": 3.063583217495962,
+          "global_psnr_db": 44.58899412475723,
+          "mean_ssim": 0.994496263103602,
+          "std_ssim": 0.0019774541706301463
+        },
+        "roughness": {
+          "mean_psnr_db": 44.886031573463605,
+          "std_psnr_db": 4.863122032790962,
+          "global_psnr_db": 42.574144378961435,
+          "mean_ssim": 0.9946917786100147,
+          "std_ssim": 0.0019389393367741253
+        },
+        "metallic": {
+          "mean_psnr_db": 71.23667847282468,
+          "std_psnr_db": 25.146981190666903,
+          "global_psnr_db": 42.920967816762484,
+          "mean_ssim": 0.9982905584491103,
+          "std_ssim": 0.002375509416706208
+        }
+      },
+      "diffuse_lpips_alex_mean": 0.004801803042937536,
+      "diffuse_lpips_alex_std": 0.002890671232295673,
+      "diffuse_lpips_alex_min": 0.0006762504926882684,
+      "diffuse_lpips_alex_max": 0.011500279419124126
+    },
+    "bc": {
+      "material_count": 24,
+      "eight_channel_mean_psnr_db": 27.319898668079574,
+      "eight_channel_std_psnr_db": 4.6876567574706005,
+      "eight_channel_global_psnr_db": 24.70161456443477,
+      "eight_channel_mean_ssim": 0.7791109224699743,
+      "eight_channel_std_ssim": 0.1400628968154751,
+      "textures": {
+        "diffuse": {
+          "mean_psnr_db": 28.759991863153463,
+          "std_psnr_db": 5.098058736815779,
+          "global_psnr_db": 25.981966769079236,
+          "mean_ssim": 0.7164031990978105,
+          "std_ssim": 0.20244032608322263
+        },
+        "normal": {
+          "mean_psnr_db": 27.269393005903634,
+          "std_psnr_db": 5.429825433114679,
+          "global_psnr_db": 23.513852561851895,
+          "mean_ssim": 0.7606166404577669,
+          "std_ssim": 0.15230609130822617
+        },
+        "roughness": {
+          "mean_psnr_db": 32.10821291996766,
+          "std_psnr_db": 8.83441136094914,
+          "global_psnr_db": 25.955007985008795,
+          "mean_ssim": 0.8906884462482029,
+          "std_ssim": 0.07056522654656824
+        },
+        "metallic": {
+          "mean_psnr_db": 57.50936250828212,
+          "std_psnr_db": 27.848997027584065,
+          "global_psnr_db": 24.395475609848166,
+          "mean_ssim": 0.9111394148448585,
+          "std_ssim": 0.1697013282392381
+        }
+      },
+      "diffuse_lpips_alex_mean": 0.3930477276444435,
+      "diffuse_lpips_alex_std": 0.17959918251670018,
+      "diffuse_lpips_alex_min": 0.08816182613372803,
+      "diffuse_lpips_alex_max": 0.7994020581245422
+    },
+    "astc": {
+      "material_count": 24,
+      "eight_channel_mean_psnr_db": 30.69409147175268,
+      "eight_channel_std_psnr_db": 5.073388332214231,
+      "eight_channel_global_psnr_db": 27.25121640971797,
+      "eight_channel_mean_ssim": 0.8722215282258419,
+      "eight_channel_std_ssim": 0.049859076176839406,
+      "textures": {
+        "diffuse": {
+          "mean_psnr_db": 32.86111982813443,
+          "std_psnr_db": 4.51015534077146,
+          "global_psnr_db": 30.59248592986944,
+          "mean_ssim": 0.882773385172516,
+          "std_ssim": 0.05474368140320942
+        },
+        "normal": {
+          "mean_psnr_db": 30.11107471925818,
+          "std_psnr_db": 6.065160912416994,
+          "global_psnr_db": 24.627519833210542,
+          "mean_ssim": 0.8350169137611564,
+          "std_ssim": 0.09151972979602815
+        },
+        "roughness": {
+          "mean_psnr_db": 34.94573692959752,
+          "std_psnr_db": 7.276747953513367,
+          "global_psnr_db": 30.371895684941922,
+          "mean_ssim": 0.9375067804190524,
+          "std_ssim": 0.03390091707156808
+        },
+        "metallic": {
+          "mean_psnr_db": 41.78556059170902,
+          "std_psnr_db": 10.257403853605636,
+          "global_psnr_db": 29.232772307666387,
+          "mean_ssim": 0.8868945485866654,
+          "std_ssim": 0.049353208149162574
+        }
+      },
+      "diffuse_lpips_alex_mean": 0.12414252758026123,
+      "diffuse_lpips_alex_std": 0.0551619185993013,
+      "diffuse_lpips_alex_min": 0.031990207731723785,
+      "diffuse_lpips_alex_max": 0.2320900857448578
+    }
+  },
+  "records": [
+    {
+      "material": "material_00",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 2.0120620051832307e-05,
+      "psnr_db": 46.96358639871579,
+      "ssim": 0.9938915409374015
+    },
+    {
+      "material": "material_00",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 2.7495872112265685e-05,
+      "psnr_db": 45.6073250083979,
+      "ssim": 0.9951424709650359
+    },
+    {
+      "material": "material_00",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 0.00011176714085184306,
+      "psnr_db": 39.51685858741764,
+      "ssim": 0.9914961162869719
+    },
+    {
+      "material": "material_00",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 1.4666273421067476e-11,
+      "psnr_db": 108.33680222780067,
+      "ssim": 0.9999999812134974
+    },
+    {
+      "material": "material_00",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.00017673403546091185,
+      "psnr_db": 37.52679805957477,
+      "ssim": 0.9489628358495056
+    },
+    {
+      "material": "material_00",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0009657867942753905,
+      "psnr_db": 30.151187372381546,
+      "ssim": 0.9173937206171644
+    },
+    {
+      "material": "material_00",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.001896419649034834,
+      "psnr_db": 27.22065553551776,
+      "ssim": 0.8502324347886284
+    },
+    {
+      "material": "material_00",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 0.0,
+      "psnr_db": "Infinity",
+      "ssim": 1.0
+    },
+    {
+      "material": "material_00",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.00015473569159564398,
+      "psnr_db": 38.104094996477784,
+      "ssim": 0.9423027315059965
+    },
+    {
+      "material": "material_00",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0010048649058124921,
+      "psnr_db": 29.978923209338816,
+      "ssim": 0.8753086992346994
+    },
+    {
+      "material": "material_00",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.0009234425558613133,
+      "psnr_db": 30.345901153275697,
+      "ssim": 0.9059983967881636
+    },
+    {
+      "material": "material_00",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.4510678926343378e-05,
+      "psnr_db": 48.383122672957846,
+      "ssim": 0.880439341013168
+    },
+    {
+      "material": "material_01",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 4.289255425905478e-05,
+      "psnr_db": 43.67618090679027,
+      "ssim": 0.9922229371862085
+    },
+    {
+      "material": "material_01",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 1.355712557991156e-05,
+      "psnr_db": 48.678323810524745,
+      "ssim": 0.9957499316363517
+    },
+    {
+      "material": "material_01",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 7.827534928840821e-06,
+      "psnr_db": 51.06374985752697,
+      "ssim": 0.996309201749912
+    },
+    {
+      "material": "material_01",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 1.4666273421067476e-11,
+      "psnr_db": 108.33680222780067,
+      "ssim": 0.9999999811613883
+    },
+    {
+      "material": "material_01",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.0013533894967352079,
+      "psnr_db": 28.68577198273446,
+      "ssim": 0.7911067300871802
+    },
+    {
+      "material": "material_01",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.00031731737500823064,
+      "psnr_db": 34.98506147049908,
+      "ssim": 0.9643767262186684
+    },
+    {
+      "material": "material_01",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 3.4750840523078985e-05,
+      "psnr_db": 44.59034686609968,
+      "ssim": 0.9890530043071795
+    },
+    {
+      "material": "material_01",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 1.0266391394747233e-10,
+      "psnr_db": 99.8858218276581,
+      "ssim": 0.9999998400985272
+    },
+    {
+      "material": "material_01",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0005082343916618998,
+      "psnr_db": 32.93935950061682,
+      "ssim": 0.9010651842015683
+    },
+    {
+      "material": "material_01",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.00012124013979293847,
+      "psnr_db": 39.163535715516375,
+      "ssim": 0.9663406383855598
+    },
+    {
+      "material": "material_01",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 3.42289767640755e-05,
+      "psnr_db": 44.65606083402521,
+      "ssim": 0.9827171001297932
+    },
+    {
+      "material": "material_01",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.4326177206706345e-05,
+      "psnr_db": 48.438696811671534,
+      "ssim": 0.8798887105315103
+    },
+    {
+      "material": "material_03",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 2.227100321951801e-05,
+      "psnr_db": 46.52260219297908,
+      "ssim": 0.9961503700729765
+    },
+    {
+      "material": "material_03",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 2.434053105850075e-05,
+      "psnr_db": 46.1366995062278,
+      "ssim": 0.9943161299164166
+    },
+    {
+      "material": "material_03",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 1.9487413650055477e-05,
+      "psnr_db": 47.10245796184757,
+      "ssim": 0.9961041479048514
+    },
+    {
+      "material": "material_03",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 2.141275919475852e-09,
+      "psnr_db": 86.6932736699563,
+      "ssim": 0.9999972217386824
+    },
+    {
+      "material": "material_03",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.0006208270202790563,
+      "psnr_db": 32.07029389522542,
+      "ssim": 0.9229729862907607
+    },
+    {
+      "material": "material_03",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0008677720910540638,
+      "psnr_db": 30.615943215911404,
+      "ssim": 0.8717043333506873
+    },
+    {
+      "material": "material_03",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.0003860058220594495,
+      "psnr_db": 34.134061448898414,
+      "ssim": 0.9364777879073287
+    },
+    {
+      "material": "material_03",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 2.87355726712835e-08,
+      "psnr_db": 75.41580143388467,
+      "ssim": 0.9999102867926103
+    },
+    {
+      "material": "material_03",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0003355110099684595,
+      "psnr_db": 34.7429322366163,
+      "ssim": 0.9398614589018429
+    },
+    {
+      "material": "material_03",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.00047177151793912985,
+      "psnr_db": 33.26268282134726,
+      "ssim": 0.9150311158056134
+    },
+    {
+      "material": "material_03",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.00022695500423357536,
+      "psnr_db": 36.440602368600274,
+      "ssim": 0.9522051435841714
+    },
+    {
+      "material": "material_03",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.2022105652246195e-05,
+      "psnr_db": 49.20019459699135,
+      "ssim": 0.9016830688102073
+    },
+    {
+      "material": "material_04",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 1.9133360466825525e-05,
+      "psnr_db": 47.182087464374945,
+      "ssim": 0.9938792660227248
+    },
+    {
+      "material": "material_04",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 1.8898752812935326e-05,
+      "psnr_db": 47.2356685531523,
+      "ssim": 0.9962878564340203
+    },
+    {
+      "material": "material_04",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 4.44823567339009e-06,
+      "psnr_db": 53.51812211322259,
+      "ssim": 0.9978812069555355
+    },
+    {
+      "material": "material_04",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 1.8775763232605678e-07,
+      "psnr_db": 67.26402399944465,
+      "ssim": 0.9997541039512519
+    },
+    {
+      "material": "material_04",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.0003523183965115539,
+      "psnr_db": 34.530646792857965,
+      "ssim": 0.9178633969615865
+    },
+    {
+      "material": "material_04",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.03361629591227705,
+      "psnr_db": 14.734501419816905,
+      "ssim": 0.82905366537181
+    },
+    {
+      "material": "material_04",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 3.291102134338421e-06,
+      "psnr_db": 54.82658639829201,
+      "ssim": 0.997663678294417
+    },
+    {
+      "material": "material_04",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 3.2958220614856334e-06,
+      "psnr_db": 54.82036243516472,
+      "ssim": 0.9868531154771755
+    },
+    {
+      "material": "material_04",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.00017795443945107787,
+      "psnr_db": 37.49691173127647,
+      "ssim": 0.9422207903836052
+    },
+    {
+      "material": "material_04",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.03370115747134952,
+      "psnr_db": 14.723551829628576,
+      "ssim": 0.8178750848501463
+    },
+    {
+      "material": "material_04",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 4.74996484482487e-06,
+      "psnr_db": 53.233096046393584,
+      "ssim": 0.9966914184141967
+    },
+    {
+      "material": "material_04",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.4636676881174893e-05,
+      "psnr_db": 48.34557514533766,
+      "ssim": 0.9021087516185186
+    },
+    {
+      "material": "material_05",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 3.897464662795915e-05,
+      "psnr_db": 44.09217813745872,
+      "ssim": 0.9923704780341754
+    },
+    {
+      "material": "material_05",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 5.663503567344149e-06,
+      "psnr_db": 52.46914821598634,
+      "ssim": 0.9967996668603182
+    },
+    {
+      "material": "material_05",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 3.584331409177471e-05,
+      "psnr_db": 44.45591842055968,
+      "ssim": 0.993312568935536
+    },
+    {
+      "material": "material_05",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 2.097276987754966e-09,
+      "psnr_db": 86.78344208395148,
+      "ssim": 0.9999973522842679
+    },
+    {
+      "material": "material_05",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.0016397108236732702,
+      "psnr_db": 27.852327365599542,
+      "ssim": 0.7027438691393874
+    },
+    {
+      "material": "material_05",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 8.203920479937152e-05,
+      "psnr_db": 40.85978557871183,
+      "ssim": 0.9710464661462556
+    },
+    {
+      "material": "material_05",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.0011344181766693028,
+      "psnr_db": 29.4522682344809,
+      "ssim": 0.8083745406194079
+    },
+    {
+      "material": "material_05",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 2.1726294420806574e-08,
+      "psnr_db": 76.63014339479209,
+      "ssim": 0.999937545094337
+    },
+    {
+      "material": "material_05",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0005484405328657082,
+      "psnr_db": 32.608704558712034,
+      "ssim": 0.8768500935409315
+    },
+    {
+      "material": "material_05",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 8.085788358508456e-05,
+      "psnr_db": 40.92277630295793,
+      "ssim": 0.9646445682641964
+    },
+    {
+      "material": "material_05",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.00047465427012595613,
+      "psnr_db": 33.23622607735247,
+      "ssim": 0.9022127605488985
+    },
+    {
+      "material": "material_05",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.5280350288699044e-05,
+      "psnr_db": 48.15866689824115,
+      "ssim": 0.8692778613745733
+    },
+    {
+      "material": "material_06",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 4.085552381030252e-05,
+      "psnr_db": 43.887492170225755,
+      "ssim": 0.9927043070731677
+    },
+    {
+      "material": "material_06",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 1.5293499617601726e-05,
+      "psnr_db": 48.15493123436318,
+      "ssim": 0.9967489984533544
+    },
+    {
+      "material": "material_06",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 3.401674117113375e-05,
+      "psnr_db": 44.68307294461983,
+      "ssim": 0.9925017890411212
+    },
+    {
+      "material": "material_06",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 3.2265801178043185e-10,
+      "psnr_db": 94.91257546646014,
+      "ssim": 0.9999996009114841
+    },
+    {
+      "material": "material_06",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.0017357445849372113,
+      "psnr_db": 27.60514180952905,
+      "ssim": 0.7123600050576108
+    },
+    {
+      "material": "material_06",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0011826764332259342,
+      "psnr_db": 29.271340571349874,
+      "ssim": 0.9400546192502119
+    },
+    {
+      "material": "material_06",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.00043881413799067893,
+      "psnr_db": 33.57719388498366,
+      "ssim": 0.8260953206420235
+    },
+    {
+      "material": "material_06",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 5.382502294910966e-09,
+      "psnr_db": 82.69015776336438,
+      "ssim": 0.9999865742726681
+    },
+    {
+      "material": "material_06",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0005781183563186137,
+      "psnr_db": 32.37983240759261,
+      "ssim": 0.8854290048991379
+    },
+    {
+      "material": "material_06",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.000192741915416033,
+      "psnr_db": 37.15023829431822,
+      "ssim": 0.9797529430158183
+    },
+    {
+      "material": "material_06",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.0002468470214741781,
+      "psnr_db": 36.07572108732612,
+      "ssim": 0.9014315649806494
+    },
+    {
+      "material": "material_06",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.517146787529125e-05,
+      "psnr_db": 48.189723981652286,
+      "ssim": 0.8693249056856337
+    },
+    {
+      "material": "material_07",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 1.82839629899727e-05,
+      "psnr_db": 47.37929666471905,
+      "ssim": 0.9944755455136635
+    },
+    {
+      "material": "material_07",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 2.973844166828424e-05,
+      "psnr_db": 45.26681792794453,
+      "ssim": 0.992990413347488
+    },
+    {
+      "material": "material_07",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 2.4581533923765542e-05,
+      "psnr_db": 46.09391019991409,
+      "ssim": 0.9937313746695069
+    },
+    {
+      "material": "material_07",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 2.433134740353389e-08,
+      "psnr_db": 76.13833840361545,
+      "ssim": 0.9999690681267333
+    },
+    {
+      "material": "material_07",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.0007433515050223974,
+      "psnr_db": 31.28805774943485,
+      "ssim": 0.8031818513969561
+    },
+    {
+      "material": "material_07",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0017187055164875036,
+      "psnr_db": 27.64798529083999,
+      "ssim": 0.6766411915838861
+    },
+    {
+      "material": "material_07",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.0004943813766439498,
+      "psnr_db": 33.059378974926695,
+      "ssim": 0.8343229973605542
+    },
+    {
+      "material": "material_07",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 5.622996417770756e-07,
+      "psnr_db": 62.50032193165484,
+      "ssim": 0.9980272562071271
+    },
+    {
+      "material": "material_07",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0003641886704858971,
+      "psnr_db": 34.38673568760731,
+      "ssim": 0.8863041405459041
+    },
+    {
+      "material": "material_07",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0011069269241174655,
+      "psnr_db": 29.55881048949726,
+      "ssim": 0.7611226029924906
+    },
+    {
+      "material": "material_07",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.00031324600978631893,
+      "psnr_db": 35.04114452460933,
+      "ssim": 0.8951178275312125
+    },
+    {
+      "material": "material_07",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.598953793683305e-05,
+      "psnr_db": 47.96164086246458,
+      "ssim": 0.8635848270404675
+    },
+    {
+      "material": "material_08",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 3.545669103452979e-05,
+      "psnr_db": 44.50301797006361,
+      "ssim": 0.99040157078311
+    },
+    {
+      "material": "material_08",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 2.9260788228579345e-05,
+      "psnr_db": 45.337139790066175,
+      "ssim": 0.9937110086862081
+    },
+    {
+      "material": "material_08",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 7.309214333563363e-06,
+      "psnr_db": 51.3612930278711,
+      "ssim": 0.9957957389526622
+    },
+    {
+      "material": "material_08",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 3.3145777722629314e-09,
+      "psnr_db": 84.79571786370882,
+      "ssim": 0.9999955173853786
+    },
+    {
+      "material": "material_08",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.0007467870982443887,
+      "psnr_db": 31.268031936818097,
+      "ssim": 0.8108421130984049
+    },
+    {
+      "material": "material_08",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0017048060822834798,
+      "psnr_db": 27.6832501384674,
+      "ssim": 0.8485390038773671
+    },
+    {
+      "material": "material_08",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 9.43906574992982e-05,
+      "psnr_db": 40.25070988724068,
+      "ssim": 0.9533623818462731
+    },
+    {
+      "material": "material_08",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 2.4710813773803712e-08,
+      "psnr_db": 76.07112952224264,
+      "ssim": 0.9999298092270833
+    },
+    {
+      "material": "material_08",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.00032644423513840105,
+      "psnr_db": 34.86190996441316,
+      "ssim": 0.8965466293803256
+    },
+    {
+      "material": "material_08",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0005455431738061849,
+      "psnr_db": 32.631708740328634,
+      "ssim": 0.8958493150472843
+    },
+    {
+      "material": "material_08",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 6.065595278102341e-05,
+      "psnr_db": 42.17126571003716,
+      "ssim": 0.963928785247684
+    },
+    {
+      "material": "material_08",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.5016005376961761e-05,
+      "psnr_db": 48.23445584873631,
+      "ssim": 0.8719104061690944
+    },
+    {
+      "material": "material_09",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 2.6459142536253645e-05,
+      "psnr_db": 45.774242341397304,
+      "ssim": 0.9943083542608733
+    },
+    {
+      "material": "material_09",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 1.62021372038385e-05,
+      "psnr_db": 47.904276944318255,
+      "ssim": 0.9939641065007682
+    },
+    {
+      "material": "material_09",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 8.414787043205959e-06,
+      "psnr_db": 50.74956870434541,
+      "ssim": 0.995668698660639
+    },
+    {
+      "material": "material_09",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 3.9158948641029204e-09,
+      "psnr_db": 84.07168976867085,
+      "ssim": 0.9999950370686504
+    },
+    {
+      "material": "material_09",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.0013481332383088,
+      "psnr_db": 28.70267183614672,
+      "ssim": 0.7625239623124682
+    },
+    {
+      "material": "material_09",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0008852535868641979,
+      "psnr_db": 30.52932304894988,
+      "ssim": 0.766048658028171
+    },
+    {
+      "material": "material_09",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 8.759922073393268e-05,
+      "psnr_db": 40.57499757216146,
+      "ssim": 0.9541669413717415
+    },
+    {
+      "material": "material_09",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 4.3512711764492026e-08,
+      "psnr_db": 73.61383850109803,
+      "ssim": 0.9999200774071454
+    },
+    {
+      "material": "material_09",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0005011579256954729,
+      "psnr_db": 33.00025396986142,
+      "ssim": 0.88200328919024
+    },
+    {
+      "material": "material_09",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0005141725954275965,
+      "psnr_db": 32.88891074273745,
+      "ssim": 0.8309499627450184
+    },
+    {
+      "material": "material_09",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 5.732109210747959e-05,
+      "psnr_db": 42.416855438201615,
+      "ssim": 0.9645856259968691
+    },
+    {
+      "material": "material_09",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.5420413197317163e-05,
+      "psnr_db": 48.11903989001628,
+      "ssim": 0.866809646688478
+    },
+    {
+      "material": "material_10",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 6.432078947330454e-05,
+      "psnr_db": 41.91648633696863,
+      "ssim": 0.991058518119876
+    },
+    {
+      "material": "material_10",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 4.050923678595086e-05,
+      "psnr_db": 43.92445939062091,
+      "ssim": 0.9926478094968149
+    },
+    {
+      "material": "material_10",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 4.793774303095113e-06,
+      "psnr_db": 53.193224169497924,
+      "ssim": 0.9970208173777074
+    },
+    {
+      "material": "material_10",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 5.86650936842699e-11,
+      "psnr_db": 102.31620231452105,
+      "ssim": 0.9999999164150921
+    },
+    {
+      "material": "material_10",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.0018139029198983977,
+      "psnr_db": 27.413859600987717,
+      "ssim": 0.7209510106743667
+    },
+    {
+      "material": "material_10",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0021472427916162536,
+      "psnr_db": 26.68118846528971,
+      "ssim": 0.8015751893227797
+    },
+    {
+      "material": "material_10",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 4.604800236905743e-05,
+      "psnr_db": 43.36789205400096,
+      "ssim": 0.977611073444399
+    },
+    {
+      "material": "material_10",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 1.0300166893585399e-10,
+      "psnr_db": 99.8715573836512,
+      "ssim": 0.999999789549518
+    },
+    {
+      "material": "material_10",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.000769004228338149,
+      "psnr_db": 31.140712722416417,
+      "ssim": 0.8731306951050112
+    },
+    {
+      "material": "material_10",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0007846108171316616,
+      "psnr_db": 31.053457087119543,
+      "ssim": 0.8704183279297273
+    },
+    {
+      "material": "material_10",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 2.9183582232095078e-05,
+      "psnr_db": 45.348614003059836,
+      "ssim": 0.9808124939331301
+    },
+    {
+      "material": "material_10",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.449841792176336e-05,
+      "psnr_db": 48.38679385719129,
+      "ssim": 0.8789860526996488
+    },
+    {
+      "material": "material_11",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 1.4032752843006472e-05,
+      "psnr_db": 48.52857123893023,
+      "ssim": 0.9950095119033279
+    },
+    {
+      "material": "material_11",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 1.5070138426327668e-05,
+      "psnr_db": 48.21882758467442,
+      "ssim": 0.9935970660340451
+    },
+    {
+      "material": "material_11",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 4.639949621305873e-05,
+      "psnr_db": 43.33486734813145,
+      "ssim": 0.9913553612300036
+    },
+    {
+      "material": "material_11",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 0.0,
+      "psnr_db": "Infinity",
+      "ssim": 1.0
+    },
+    {
+      "material": "material_11",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.00048015698107421067,
+      "psnr_db": 33.18616752481813,
+      "ssim": 0.9099905621518122
+    },
+    {
+      "material": "material_11",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0008458487688702002,
+      "psnr_db": 30.72707278469541,
+      "ssim": 0.8514218602140615
+    },
+    {
+      "material": "material_11",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.0011324171216620963,
+      "psnr_db": 29.459935729106476,
+      "ssim": 0.846245745099073
+    },
+    {
+      "material": "material_11",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 0.0,
+      "psnr_db": "Infinity",
+      "ssim": 1.0
+    },
+    {
+      "material": "material_11",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.00012242487486585212,
+      "psnr_db": 39.121303312149735,
+      "ssim": 0.952493255026285
+    },
+    {
+      "material": "material_11",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.00022665992023952134,
+      "psnr_db": 36.44625268394391,
+      "ssim": 0.911328660898855
+    },
+    {
+      "material": "material_11",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.0004113052989237671,
+      "psnr_db": 33.85835695357034,
+      "ssim": 0.9095012676778023
+    },
+    {
+      "material": "material_11",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.5259025527653332e-05,
+      "psnr_db": 48.16473200422823,
+      "ssim": 0.8692606856914408
+    },
+    {
+      "material": "material_12",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 5.0158881565778815e-05,
+      "psnr_db": 42.99652155893966,
+      "ssim": 0.9873670529541981
+    },
+    {
+      "material": "material_12",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 6.128838162332098e-05,
+      "psnr_db": 42.12621846445916,
+      "ssim": 0.9926284783872102
+    },
+    {
+      "material": "material_12",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 1.6663761417720256e-05,
+      "psnr_db": 47.78226960997739,
+      "ssim": 0.9936683677588193
+    },
+    {
+      "material": "material_12",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 2.7865919500028205e-10,
+      "psnr_db": 95.54926621827238,
+      "ssim": 0.9999996062773883
+    },
+    {
+      "material": "material_12",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.001305235429368291,
+      "psnr_db": 28.843111462155182,
+      "ssim": 0.7040976386544918
+    },
+    {
+      "material": "material_12",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.003093692250903144,
+      "psnr_db": 25.09522890501566,
+      "ssim": 0.7730614892046891
+    },
+    {
+      "material": "material_12",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.00016610487256391306,
+      "psnr_db": 37.79617627653468,
+      "ssim": 0.9220600027296252
+    },
+    {
+      "material": "material_12",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 3.420909221932109e-09,
+      "psnr_db": 84.65858450204604,
+      "ssim": 0.9999899368895548
+    },
+    {
+      "material": "material_12",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0004829841429545096,
+      "psnr_db": 33.160671275101926,
+      "ssim": 0.8558981785815192
+    },
+    {
+      "material": "material_12",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.001418662540582923,
+      "psnr_db": 28.481208985468676,
+      "ssim": 0.860795057721354
+    },
+    {
+      "material": "material_12",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.00011502925371335695,
+      "psnr_db": 39.39191697814691,
+      "ssim": 0.9363757044337867
+    },
+    {
+      "material": "material_12",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.5374067776368192e-05,
+      "psnr_db": 48.132112086812285,
+      "ssim": 0.8667710825145392
+    },
+    {
+      "material": "material_13",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 1.6484126913807402e-05,
+      "psnr_db": 47.829340504351194,
+      "ssim": 0.9947152390673079
+    },
+    {
+      "material": "material_13",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 3.128127500339601e-05,
+      "psnr_db": 45.0471555370508,
+      "ssim": 0.9917359673261238
+    },
+    {
+      "material": "material_13",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 6.722936820668742e-05,
+      "psnr_db": 41.724409700428915,
+      "ssim": 0.990012784304518
+    },
+    {
+      "material": "material_13",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 3.345992156198584e-06,
+      "psnr_db": 54.754750814619875,
+      "ssim": 0.99721492062564
+    },
+    {
+      "material": "material_13",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.000657943710899011,
+      "psnr_db": 31.818112600207527,
+      "ssim": 0.8489714873217092
+    },
+    {
+      "material": "material_13",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0014384673828918275,
+      "psnr_db": 28.420999812471997,
+      "ssim": 0.7279003550713744
+    },
+    {
+      "material": "material_13",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.001426396723461176,
+      "psnr_db": 28.45759667438118,
+      "ssim": 0.7518611301353035
+    },
+    {
+      "material": "material_13",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 1.7811479183057603e-05,
+      "psnr_db": 47.493000123523494,
+      "ssim": 0.9948077058523379
+    },
+    {
+      "material": "material_13",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.00023516927058672363,
+      "psnr_db": 36.28619427861679,
+      "ssim": 0.910718106957055
+    },
+    {
+      "material": "material_13",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.00075330354467391,
+      "psnr_db": 31.2302998898757,
+      "ssim": 0.811072827679129
+    },
+    {
+      "material": "material_13",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.000661236270530837,
+      "psnr_db": 31.79643332264279,
+      "ssim": 0.8600806101798275
+    },
+    {
+      "material": "material_13",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 3.265087144712519e-05,
+      "psnr_db": 44.86105222976132,
+      "ssim": 0.9925099275401879
+    },
+    {
+      "material": "material_14",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 3.334434729855611e-05,
+      "psnr_db": 44.76977779292255,
+      "ssim": 0.9969350605452849
+    },
+    {
+      "material": "material_14",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 1.756239720536732e-05,
+      "psnr_db": 47.55416204716533,
+      "ssim": 0.995558636450065
+    },
+    {
+      "material": "material_14",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 0.00010195067761156855,
+      "psnr_db": 39.91609883353354,
+      "ssim": 0.9963966165606984
+    },
+    {
+      "material": "material_14",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 5.351183141722067e-05,
+      "psnr_db": 42.71550185247345,
+      "ssim": 0.9952471857321925
+    },
+    {
+      "material": "material_14",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.004394172378684274,
+      "psnr_db": 23.57122910173142,
+      "ssim": 0.46544107102975424
+    },
+    {
+      "material": "material_14",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0014682768058402074,
+      "psnr_db": 28.3319206164304,
+      "ssim": 0.6477624207921916
+    },
+    {
+      "material": "material_14",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.00488462945053963,
+      "psnr_db": 23.111683764057535,
+      "ssim": 0.9062152064068312
+    },
+    {
+      "material": "material_14",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 0.004355349076918647,
+      "psnr_db": 23.609770309883537,
+      "ssim": 0.48042468080376177
+    },
+    {
+      "material": "material_14",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0011875247152170448,
+      "psnr_db": 29.253573429067302,
+      "ssim": 0.8569426051373785
+    },
+    {
+      "material": "material_14",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0007935764618212894,
+      "psnr_db": 31.00411222220726,
+      "ssim": 0.777170800840461
+    },
+    {
+      "material": "material_14",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.0016166972977899837,
+      "psnr_db": 27.913712875801984,
+      "ssim": 0.9528316662950357
+    },
+    {
+      "material": "material_14",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 0.0015622537897645112,
+      "psnr_db": 28.062484131340256,
+      "ssim": 0.804798181055184
+    },
+    {
+      "material": "material_15",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 3.386968435829226e-05,
+      "psnr_db": 44.70188850656541,
+      "ssim": 0.9956465377975308
+    },
+    {
+      "material": "material_15",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 1.6411876737139122e-05,
+      "psnr_db": 47.84841753500234,
+      "ssim": 0.9958959426848178
+    },
+    {
+      "material": "material_15",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 9.128564427132783e-05,
+      "psnr_db": 40.39597514951496,
+      "ssim": 0.996777018247894
+    },
+    {
+      "material": "material_15",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 5.166339715549364e-05,
+      "psnr_db": 42.868170399478885,
+      "ssim": 0.9950688365085814
+    },
+    {
+      "material": "material_15",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.0033861869893763038,
+      "psnr_db": 24.702890632938153,
+      "ssim": 0.5126470416177353
+    },
+    {
+      "material": "material_15",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0014581290742466193,
+      "psnr_db": 28.36204030372003,
+      "ssim": 0.6512148235021923
+    },
+    {
+      "material": "material_15",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.004840606890694088,
+      "psnr_db": 23.151001853067484,
+      "ssim": 0.9079490611961981
+    },
+    {
+      "material": "material_15",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 0.004278219563863331,
+      "psnr_db": 23.687369306276636,
+      "ssim": 0.4863267529624211
+    },
+    {
+      "material": "material_15",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0011932655360811213,
+      "psnr_db": 29.232629024967046,
+      "ssim": 0.7621510443365125
+    },
+    {
+      "material": "material_15",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0007909959177418938,
+      "psnr_db": 31.018257578509253,
+      "ssim": 0.7793166527263179
+    },
+    {
+      "material": "material_15",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.0015917288951960234,
+      "psnr_db": 27.98130899755732,
+      "ssim": 0.9545977274458447
+    },
+    {
+      "material": "material_15",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 0.0015283286630122267,
+      "psnr_db": 28.15783241844125,
+      "ssim": 0.8070681769794293
+    },
+    {
+      "material": "material_16",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 3.4532145115391526e-05,
+      "psnr_db": 44.61776442709294,
+      "ssim": 0.9969099754671903
+    },
+    {
+      "material": "material_16",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 1.6090699984730044e-05,
+      "psnr_db": 47.934250626198505,
+      "ssim": 0.9959733740176433
+    },
+    {
+      "material": "material_16",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 8.841576119043294e-05,
+      "psnr_db": 40.53470309784498,
+      "ssim": 0.9962981787951227
+    },
+    {
+      "material": "material_16",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 5.219213124189794e-05,
+      "psnr_db": 42.823949685651634,
+      "ssim": 0.9954638109873284
+    },
+    {
+      "material": "material_16",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.004655044299121413,
+      "psnr_db": 23.320761817562282,
+      "ssim": 0.44217535813962305
+    },
+    {
+      "material": "material_16",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0014551730981503194,
+      "psnr_db": 28.3708534269173,
+      "ssim": 0.6512761744238177
+    },
+    {
+      "material": "material_16",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.004667256955533603,
+      "psnr_db": 23.309382884016724,
+      "ssim": 0.9076811677559465
+    },
+    {
+      "material": "material_16",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 0.0043419343454060766,
+      "psnr_db": 23.623167478192837,
+      "ssim": 0.48441495811076274
+    },
+    {
+      "material": "material_16",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0012952090700696292,
+      "psnr_db": 28.876601229734923,
+      "ssim": 0.8511911895190459
+    },
+    {
+      "material": "material_16",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0007937265344224491,
+      "psnr_db": 31.003291009081387,
+      "ssim": 0.7774868948235643
+    },
+    {
+      "material": "material_16",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.0014892962022788326,
+      "psnr_db": 28.270189179482706,
+      "ssim": 0.9535627554693111
+    },
+    {
+      "material": "material_16",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 0.0015295796935910256,
+      "psnr_db": 28.154278906406113,
+      "ssim": 0.8088056602247375
+    },
+    {
+      "material": "material_17",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 0.00011592157526624606,
+      "psnr_db": 39.358357258392466,
+      "ssim": 0.995153059303707
+    },
+    {
+      "material": "material_17",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 3.147022660247694e-05,
+      "psnr_db": 45.02100129922782,
+      "ssim": 0.9956974736852297
+    },
+    {
+      "material": "material_17",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 0.00014138842015080103,
+      "psnr_db": 38.49586158223316,
+      "ssim": 0.9961318435625983
+    },
+    {
+      "material": "material_17",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 0.0003039188408498919,
+      "psnr_db": 35.172423758545456,
+      "ssim": 0.9952890019032588
+    },
+    {
+      "material": "material_17",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.012033419166882636,
+      "psnr_db": 19.196109550103582,
+      "ssim": 0.2867452624757216
+    },
+    {
+      "material": "material_17",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0038896832622293,
+      "psnr_db": 24.100857619304726,
+      "ssim": 0.5263224189166621
+    },
+    {
+      "material": "material_17",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.01124065516343215,
+      "psnr_db": 19.49208375104047,
+      "ssim": 0.8463100874743952
+    },
+    {
+      "material": "material_17",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 0.023548270683036006,
+      "psnr_db": 16.280409806960655,
+      "ssim": 0.8357777879342547
+    },
+    {
+      "material": "material_17",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.003911968213319489,
+      "psnr_db": 24.076046827280017,
+      "ssim": 0.7721675217990788
+    },
+    {
+      "material": "material_17",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0014985810155909293,
+      "psnr_db": 28.24319773457072,
+      "ssim": 0.7395795056575767
+    },
+    {
+      "material": "material_17",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.003631140685729559,
+      "psnr_db": 24.399569243582736,
+      "ssim": 0.9432021452096051
+    },
+    {
+      "material": "material_17",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 0.007327278153547246,
+      "psnr_db": 21.35057321732759,
+      "ssim": 0.9338684918769581
+    },
+    {
+      "material": "material_18",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 6.856892996032431e-05,
+      "psnr_db": 41.63872627783459,
+      "ssim": 0.9949268994214965
+    },
+    {
+      "material": "material_18",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 3.115238846522993e-05,
+      "psnr_db": 45.06508650208549,
+      "ssim": 0.9960672304160978
+    },
+    {
+      "material": "material_18",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 0.00018131621495691213,
+      "psnr_db": 37.41563355576754,
+      "ssim": 0.9955934424750502
+    },
+    {
+      "material": "material_18",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 0.0003734265560816039,
+      "psnr_db": 34.27794800608677,
+      "ssim": 0.9964552957866016
+    },
+    {
+      "material": "material_18",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.00829325105535099,
+      "psnr_db": 20.812751873485063,
+      "ssim": 0.3115500241262774
+    },
+    {
+      "material": "material_18",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.003960485979757777,
+      "psnr_db": 24.02251519787262,
+      "ssim": 0.5255148508307719
+    },
+    {
+      "material": "material_18",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.011768409953569798,
+      "psnr_db": 19.292822113315005,
+      "ssim": 0.8584543946001982
+    },
+    {
+      "material": "material_18",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 0.025143425331332937,
+      "psnr_db": 15.995755579482838,
+      "ssim": 0.8420935338002968
+    },
+    {
+      "material": "material_18",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0027072999437512094,
+      "psnr_db": 25.674636257589547,
+      "ssim": 0.7910373339144693
+    },
+    {
+      "material": "material_18",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0015197701090091074,
+      "psnr_db": 28.182221014892267,
+      "ssim": 0.7367229371273724
+    },
+    {
+      "material": "material_18",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.0039934171790191,
+      "psnr_db": 23.986553181347205,
+      "ssim": 0.9497665029760988
+    },
+    {
+      "material": "material_18",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 0.008094858777843768,
+      "psnr_db": 20.917907235058102,
+      "ssim": 0.9429660634623915
+    },
+    {
+      "material": "material_19",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 5.6520616734291005e-05,
+      "psnr_db": 42.477931079197624,
+      "ssim": 0.9948100902883019
+    },
+    {
+      "material": "material_19",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 3.2541289406111806e-05,
+      "psnr_db": 44.875652427063244,
+      "ssim": 0.9959155111744834
+    },
+    {
+      "material": "material_19",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 0.00016567055895581417,
+      "psnr_db": 37.80754662486282,
+      "ssim": 0.9955635050458715
+    },
+    {
+      "material": "material_19",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 0.00035834449274024305,
+      "psnr_db": 34.456992656493085,
+      "ssim": 0.9967484666577935
+    },
+    {
+      "material": "material_19",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.00551809671796634,
+      "psnr_db": 22.582106917308877,
+      "ssim": 0.3858367698412773
+    },
+    {
+      "material": "material_19",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.004233253783985817,
+      "psnr_db": 23.733256947480996,
+      "ssim": 0.5189209518893892
+    },
+    {
+      "material": "material_19",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.011738324862870778,
+      "psnr_db": 19.303938753813284,
+      "ssim": 0.8576777461269565
+    },
+    {
+      "material": "material_19",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 0.02537661950098986,
+      "psnr_db": 15.955662321171642,
+      "ssim": 0.840563179442179
+    },
+    {
+      "material": "material_19",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0017898514132607542,
+      "psnr_db": 27.471830210197716,
+      "ssim": 0.8094697761860363
+    },
+    {
+      "material": "material_19",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.00171202491650872,
+      "psnr_db": 27.664899189675683,
+      "ssim": 0.732213530258338
+    },
+    {
+      "material": "material_19",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.004050391415727409,
+      "psnr_db": 23.925030060503506,
+      "ssim": 0.9494677863188956
+    },
+    {
+      "material": "material_19",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 0.008204554863246944,
+      "psnr_db": 20.859449765462607,
+      "ssim": 0.9420294213983597
+    },
+    {
+      "material": "material_20",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 8.504306376760635e-06,
+      "psnr_db": 50.70361102278301,
+      "ssim": 0.996411865513238
+    },
+    {
+      "material": "material_20",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 1.1613781090749382e-05,
+      "psnr_db": 49.350263642830264,
+      "ssim": 0.9969734335970397
+    },
+    {
+      "material": "material_20",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 1.4042647874003849e-05,
+      "psnr_db": 48.52550994154633,
+      "ssim": 0.9938651750367272
+    },
+    {
+      "material": "material_20",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 2.3435469151686052e-05,
+      "psnr_db": 46.30126347970568,
+      "ssim": 0.9914433528736253
+    },
+    {
+      "material": "material_20",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.00016399520338198422,
+      "psnr_db": 37.85168854240108,
+      "ssim": 0.9663715932377138
+    },
+    {
+      "material": "material_20",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0011771533297939142,
+      "psnr_db": 29.29166964559819,
+      "ssim": 0.9649925724648926
+    },
+    {
+      "material": "material_20",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.00010926561475328488,
+      "psnr_db": 39.615164864709314,
+      "ssim": 0.9553522109333357
+    },
+    {
+      "material": "material_20",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 0.0001464550426518178,
+      "psnr_db": 38.34295670358921,
+      "ssim": 0.9447806562652268
+    },
+    {
+      "material": "material_20",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 7.775683125833242e-05,
+      "psnr_db": 41.09261446063535,
+      "ssim": 0.9668197384696309
+    },
+    {
+      "material": "material_20",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0008570585458791438,
+      "psnr_db": 30.669895103010756,
+      "ssim": 0.9608511915971424
+    },
+    {
+      "material": "material_20",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 9.741633091385069e-05,
+      "psnr_db": 40.11368231712268,
+      "ssim": 0.9541452695174802
+    },
+    {
+      "material": "material_20",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 0.00011417704434239716,
+      "psnr_db": 39.42421203599449,
+      "ssim": 0.9464319274817863
+    },
+    {
+      "material": "material_21",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 8.502698093786197e-06,
+      "psnr_db": 50.70443241190468,
+      "ssim": 0.9956421224876847
+    },
+    {
+      "material": "material_21",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 1.733234335070354e-05,
+      "psnr_db": 47.611427162543876,
+      "ssim": 0.9923412142155964
+    },
+    {
+      "material": "material_21",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 1.2950509120269697e-05,
+      "psnr_db": 48.87713157931956,
+      "ssim": 0.9948782582870846
+    },
+    {
+      "material": "material_21",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 4.677293477282006e-06,
+      "psnr_db": 53.30005379382612,
+      "ssim": 0.9965860054961112
+    },
+    {
+      "material": "material_21",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.00030531571638558135,
+      "psnr_db": 35.152508394489466,
+      "ssim": 0.9093740455151592
+    },
+    {
+      "material": "material_21",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0007748499355193854,
+      "psnr_db": 31.10782398766427,
+      "ssim": 0.8003785616889435
+    },
+    {
+      "material": "material_21",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.0006832790536897699,
+      "psnr_db": 31.654018926190112,
+      "ssim": 0.8850156448465596
+    },
+    {
+      "material": "material_21",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 1.30199048086894e-05,
+      "psnr_db": 48.853921909761254,
+      "ssim": 0.9939790041115715
+    },
+    {
+      "material": "material_21",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.00010088474598359523,
+      "psnr_db": 39.96174495170068,
+      "ssim": 0.9486667385166877
+    },
+    {
+      "material": "material_21",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.00035819219083941763,
+      "psnr_db": 34.45883886695582,
+      "ssim": 0.8603212900389288
+    },
+    {
+      "material": "material_21",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.00018296546003722825,
+      "psnr_db": 37.37630888034794,
+      "ssim": 0.9271858781276933
+    },
+    {
+      "material": "material_21",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.67439964013236e-05,
+      "psnr_db": 47.761408780094,
+      "ssim": 0.9926024445905034
+    },
+    {
+      "material": "material_22",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 3.525772811907996e-05,
+      "psnr_db": 44.52745675506209,
+      "ssim": 0.992200500849922
+    },
+    {
+      "material": "material_22",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 7.27798945150726e-05,
+      "psnr_db": 41.37988578202312,
+      "ssim": 0.9930021962227138
+    },
+    {
+      "material": "material_22",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 2.5430303202466994e-05,
+      "psnr_db": 45.94648461752199,
+      "ssim": 0.9946772260555046
+    },
+    {
+      "material": "material_22",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 6.893148298918556e-10,
+      "psnr_db": 91.61582378011082,
+      "ssim": 0.9999991549384986
+    },
+    {
+      "material": "material_22",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.0004932006511213648,
+      "psnr_db": 33.069763587222326,
+      "ssim": 0.8688206682801555
+    },
+    {
+      "material": "material_22",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.0034300040172270396,
+      "psnr_db": 24.647053713104327,
+      "ssim": 0.7431000077327283
+    },
+    {
+      "material": "material_22",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.0002621905042623,
+      "psnr_db": 35.81383041178208,
+      "ssim": 0.9234701820500756
+    },
+    {
+      "material": "material_22",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 5.6080529072731964e-09,
+      "psnr_db": 82.5118789781807,
+      "ssim": 0.9999875636438932
+    },
+    {
+      "material": "material_22",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.00028734473578386437,
+      "psnr_db": 35.41596754823867,
+      "ssim": 0.9112755026307817
+    },
+    {
+      "material": "material_22",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.0025911447460654083,
+      "psnr_db": 25.865083258556854,
+      "ssim": 0.7732073174044455
+    },
+    {
+      "material": "material_22",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.00024218542275383635,
+      "psnr_db": 36.15852000780472,
+      "ssim": 0.9280326264410264
+    },
+    {
+      "material": "material_22",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.5365678667835498e-05,
+      "psnr_db": 48.13448253163095,
+      "ssim": 0.8669613454555303
+    },
+    {
+      "material": "material_23",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 6.329926537906626e-05,
+      "psnr_db": 41.986013301669914,
+      "ssim": 0.9902340964605577
+    },
+    {
+      "material": "material_23",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 3.780838801047362e-05,
+      "psnr_db": 44.224118387199866,
+      "ssim": 0.9955379173316597
+    },
+    {
+      "material": "material_23",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 5.597958655883812e-05,
+      "psnr_db": 42.51970313370361,
+      "ssim": 0.9935755170411703
+    },
+    {
+      "material": "material_23",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 1.6132900763174224e-10,
+      "psnr_db": 97.92287537621843,
+      "ssim": 0.9999997930404759
+    },
+    {
+      "material": "material_23",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.001868499218762236,
+      "psnr_db": 27.285070793970682,
+      "ssim": 0.792428084891264
+    },
+    {
+      "material": "material_23",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.022232407628739306,
+      "psnr_db": 16.53013503416308,
+      "ssim": 0.8608735581772883
+    },
+    {
+      "material": "material_23",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.0004169710832633521,
+      "psnr_db": 33.798940620876564,
+      "ssim": 0.9577355631047009
+    },
+    {
+      "material": "material_23",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 1.2050707080222417e-09,
+      "psnr_db": 89.18987469933127,
+      "ssim": 0.9999971931296332
+    },
+    {
+      "material": "material_23",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0007099927354545787,
+      "psnr_db": 31.4874609489801,
+      "ssim": 0.8921555393814119
+    },
+    {
+      "material": "material_23",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.021858178054052088,
+      "psnr_db": 16.60386040650159,
+      "ssim": 0.8539194014574929
+    },
+    {
+      "material": "material_23",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.0002673074893503842,
+      "psnr_db": 35.729888731253205,
+      "ssim": 0.9627993830949234
+    },
+    {
+      "material": "material_23",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.4522426611353639e-05,
+      "psnr_db": 48.379608095402986,
+      "ssim": 0.8778349146623119
+    },
+    {
+      "material": "material_24",
+      "codec": "ntc",
+      "texture": "diffuse",
+      "mse": 0.00013472373980713412,
+      "psnr_db": 38.705558700616265,
+      "ssim": 0.9929440350548915
+    },
+    {
+      "material": "material_24",
+      "codec": "ntc",
+      "texture": "normal",
+      "mse": 0.0002209170247343741,
+      "psnr_db": 36.55770814398861,
+      "ssim": 0.9886274806469463
+    },
+    {
+      "material": "material_24",
+      "codec": "ntc",
+      "texture": "roughness",
+      "mse": 5.956090661516836e-05,
+      "psnr_db": 42.25038700191719,
+      "ssim": 0.9939877317048479
+    },
+    {
+      "material": "material_24",
+      "codec": "ntc",
+      "texture": "metallic",
+      "mse": 1.9789202711720943e-07,
+      "psnr_db": 67.03571702755463,
+      "ssim": 0.9997501916947212
+    },
+    {
+      "material": "material_24",
+      "codec": "bc",
+      "texture": "diffuse",
+      "mse": 0.006450700985509382,
+      "psnr_db": 21.90393088838085,
+      "ssim": 0.6957184101965309
+    },
+    {
+      "material": "material_24",
+      "codec": "bc",
+      "texture": "normal",
+      "mse": 0.013917340170931365,
+      "psnr_db": 18.564437575030524,
+      "ssim": 0.4256257523104023
+    },
+    {
+      "material": "material_24",
+      "codec": "bc",
+      "texture": "roughness",
+      "mse": 0.0029604364313268977,
+      "psnr_db": 25.28644259973081,
+      "ssim": 0.7231344069157174
+    },
+    {
+      "material": "material_24",
+      "codec": "bc",
+      "texture": "metallic",
+      "mse": 4.462220971518301e-06,
+      "psnr_db": 53.50448927029578,
+      "ssim": 0.9796387092045193
+    },
+    {
+      "material": "material_24",
+      "codec": "astc",
+      "texture": "diffuse",
+      "mse": 0.0025738578951155886,
+      "psnr_db": 25.894154345376144,
+      "ssim": 0.8798606960299272
+    },
+    {
+      "material": "material_24",
+      "codec": "astc",
+      "texture": "normal",
+      "mse": 0.008995431305727128,
+      "psnr_db": 20.45978008615634,
+      "ssim": 0.5891266037662197
+    },
+    {
+      "material": "material_24",
+      "codec": "astc",
+      "texture": "roughness",
+      "mse": 0.0013089623836273928,
+      "psnr_db": 28.830728338295245,
+      "ssim": 0.8729122897151591
+    },
+    {
+      "material": "material_24",
+      "codec": "astc",
+      "texture": "metallic",
+      "mse": 1.9609159552108604e-05,
+      "psnr_db": 47.07541019779612,
+      "ssim": 0.8495472715153104
+    }
+  ]
+}
