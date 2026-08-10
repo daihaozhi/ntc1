@@ -24,7 +24,7 @@ Metrics are arithmetic means over 24 materials. PSNR and SSIM weight all eight m
 
 | Codec | BPPC | 8-channel PSNR | 8-channel SSIM | Diffuse LPIPS | Compression |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| **NTC** | **0.348** | **44.88 dB** | **0.9947** | **0.0048** | **23.0x** |
+| **NTC** | **0.348** | **34.84 dB** | **0.9947** | **0.0048** | **23.0x** |
 | Equal-storage BC7/BC5 | 0.347 | 27.32 dB | 0.7791 | 0.3930 | 23.1x |
 | ASTC 12x12 | 0.339 | 30.69 dB | 0.8722 | 0.1241 | 23.6x |
 
